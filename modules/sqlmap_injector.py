@@ -12,8 +12,10 @@ def run_scan(state, config, user_targets=None, target_urls=None): # Added target
     """
     Runs SQLMap scan based on the selected profile and identified/provided targets.
     """
-    primary_target_url = state.get_full_state()["scan_metadata"]["target_info"]["url"] # Keep for reference
-    profile_name = state.get_full_state()["scan_config_used"].get("profile_name", "default")
+    full_state_data = state.get_full_state()
+    primary_target_url = full_state_data["scan_metadata"]["target_info"]["url"] # Keep for reference
+    # Corrected path to scan_config_used
+    profile_name = full_state_data["scan_metadata"]["config_used"].get("profile_name", "default")
     # profile = config.get("scan_profiles", {}).get(profile_name, config.get("scan_profiles", {}).get("default")) # Not directly used for sqlmap_options anymore
 
     print(f"\n[*] Phase SQLMap: SQL Injection Deep Dive [Profile: {profile_name}]")
@@ -84,8 +86,8 @@ def run_scan(state, config, user_targets=None, target_urls=None): # Added target
         current_targets_tested = state.get_module_findings("sqlmap_results").get("targets_tested", [])
         if sqli_target_url not in current_targets_tested: # Ensure no duplicates if re-run
             current_targets_tested.append(sqli_target_url)
-        state.update_module_findings("sqlmap_results", {"targets_tested": current_targets_tested})
-        state.update_module_findings("sqlmap_results", {"targets_tested": current_targets})
+        # Corrected variable name below
+        state.update_module_findings("sqlmap_results", {"targets_tested": current_targets_tested}) 
 
 
         # Use get_scan_filename_prefix to get the base for the overall scan run

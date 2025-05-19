@@ -1,5 +1,10 @@
 # Main orchestrator for the WP Analyzer module
 
+# Ensure sanitize_filename is imported from core.utils, not from .utils
+from core.utils import sanitize_filename 
+# Remove any incorrect local import if it exists, e.g.:
+# from .utils import sanitize_filename # THIS WOULD BE WRONG
+
 # Import analysis functions from sibling modules
 from .security_headers import analyze_security_headers
 from .user_registration import analyze_user_registration

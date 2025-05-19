@@ -2,7 +2,8 @@ import json
 import re
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup # For parsing HTML to find actions
-from .utils import make_request, sanitize_filename # Assuming utils.py is in the same wp_analyzer package
+from .utils import make_request 
+from core.utils import sanitize_filename # Corrected import
 
 # Basic XSS and SQLi payloads for AJAX parameter fuzzing (keep small and targeted)
 # These should be distinct from the main XSS/SQLi checkers' payloads

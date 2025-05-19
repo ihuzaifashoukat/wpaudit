@@ -1,7 +1,8 @@
 import requests
 import re
 from urllib.parse import urljoin
-from .utils import make_request, sanitize_filename
+from .utils import make_request
+from core.utils import sanitize_filename # Corrected import
 
 # CSP Parser Helper (Simplified)
 def _parse_csp(csp_header_value):

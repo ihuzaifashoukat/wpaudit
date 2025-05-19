@@ -152,7 +152,7 @@ def _check_single_tool(tool_key, config, state):
         print(f"      [-] Error checking {tool_key}: {type(e).__name__} - {e}")
         tool_check_result["status"] = f"Error ({type(e).__name__})"
 
-    state.update_tool_check(tool_key, tool_check_result)
+    state.add_tool_check_result(tool_key, tool_check_result) # Corrected method name
     return tool_check_result
 
 

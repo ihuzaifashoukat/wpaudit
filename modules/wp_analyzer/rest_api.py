@@ -1,7 +1,8 @@
 import json
 import re
 from urllib.parse import urljoin, urlparse
-from .utils import make_request, sanitize_filename
+from .utils import make_request # sanitize_filename is not used here, but if it were, it should be from core.utils
+from core.utils import sanitize_filename # Example if it were needed
 
 # Known core/common WordPress REST API namespaces to potentially exclude from "custom" or to analyze differently
 CORE_COMMON_REST_NAMESPACES = [

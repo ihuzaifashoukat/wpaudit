@@ -12,13 +12,13 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 # --- Core Imports ---
-# Assume current directory is omegascythe_dominator/ when running main.py
+# Assume current directory is wpaudit/ when running main.py
 # If running from elsewhere, adjust Python path or use absolute imports
 try:
     from core.config_loader import load_configuration
     from core.state import ScanState
     from core.tool_checker import check_phase_tools # Combined tool check function
-    from core.utils import print_dominator_banner, sanitize_filename, user_confirm, get_target_ip
+    from core.utils import print_wpaudit_banner, sanitize_filename, user_confirm, get_target_ip
     from reporting.generator import generate_summary_report, save_full_report
 except ImportError as e:
      print(f"[!!!] Failed to import core components. Is the script structure correct and are you running from the right directory? Error: {e}")
@@ -43,7 +43,7 @@ PHASE_MODULE_MAP = {
 
 
 def main():
-    print_dominator_banner()
+    print_wpaudit_banner()
 
     parser = argparse.ArgumentParser(
         description="WPAUDIT - Hyper-Configurable WordPress Security Auditing Suite.",
@@ -179,16 +179,25 @@ def main():
                 # or we refine this to construct full URLs from paths.
                 # A simpler approach for now: pass the sets directly and let modules decide.
                 kwargs['target_urls'] = list(expanded_target_urls) # Validated http/s URLs
-                kwargs['discovered_paths'] = list(discovered_paths_for_fuzzing) # Paths like /admin, /backup.zip
-                kwargs['urls_with_params'] = list(discovered_urls_with_params) # Full URLs that Arjun found params for
-
+                
                 if phase_name == "sqlmap":
                     kwargs['user_targets'] = args.sqlmap_targets # Keep passing CLI targets separately for SQLMap
+                    # SQLMap gets urls_with_params from state, not as a direct kwarg to run_scan
+                    # Ensure discovered_paths is also not passed if it was added for Nuclei
+                    if 'discovered_paths' in kwargs:
+                        del kwargs['discovered_paths']
+                    if 'urls_with_params' in kwargs: # Remove if it was added for Nuclei
+                        del kwargs['urls_with_params']
+                elif phase_name == "nuclei": # Nuclei can take discovered_paths and urls_with_params
+                    kwargs['discovered_paths'] = list(discovered_paths_for_fuzzing)
+                    kwargs['urls_with_params'] = list(discovered_urls_with_params) # Full URLs that Arjun found params for
 
-            elif phase_name in ["nmap", "wpscan", "directory_bruteforce", "parameter_finder"]:
-                # These tools typically operate on base URLs or hostnames
+
+            # nmap and directory_bruteforcer get their target from state, not target_urls kwarg
+            elif phase_name in ["wpscan", "parameter_finder"]: 
+                # These tools might operate on multiple URLs (e.g. discovered subdomains)
                 kwargs['target_urls'] = list(expanded_target_urls)
-
+            # For nmap and directory_bruteforce, no specific target_urls kwarg is needed here as they use state.
 
             # --- Execute Phase ---
             run_func(**kwargs) # Execute the phase function

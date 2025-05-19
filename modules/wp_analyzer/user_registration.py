@@ -1,7 +1,8 @@
 import re
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
-from .utils import make_request, sanitize_filename
+from .utils import make_request
+from core.utils import sanitize_filename # Corrected import
 
 # Footprints for CAPTCHA plugins (can be shared or expanded from auth_hardening_checker)
 CAPTCHA_FOOTPRINTS_REG = {

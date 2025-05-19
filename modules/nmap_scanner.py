@@ -101,10 +101,12 @@ def run_scan(state, config):
     Runs Nmap scan based on the selected profile, including NSE scripts.
     Parses XML output for open ports, services, and script results.
     """
-    target_info = state.get_full_state()["scan_metadata"]["target_info"]
+    full_state_data = state.get_full_state()
+    target_info = full_state_data["scan_metadata"]["target_info"]
     target_ip = target_info.get("ip")
     hostname = target_info.get("hostname")
-    profile_name = state.get_full_state()["scan_config_used"].get("profile_name", "default")
+    # Corrected path to scan_config_used
+    profile_name = full_state_data["scan_metadata"]["config_used"].get("profile_name", "default")
     
     # Ensure profile exists, fallback to a minimal default if necessary
     scan_profiles_config = config.get("scan_profiles", {})

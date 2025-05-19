@@ -90,7 +90,31 @@
                                         {% endfor %}
                                         </ul>
                                     {% endif %}
-                                    <!-- Add similar sections for themes, plugins -->
+                                    {% if target_scan_data.data.main_theme and target_scan_data.data.main_theme.vulnerabilities %}
+                                        <h4>Main Theme Vulnerabilities ({{ target_scan_data.data.main_theme.slug | default('Unknown Theme') }}):</h4>
+                                        <ul>
+                                        {% for vuln in target_scan_data.data.main_theme.vulnerabilities %}
+                                            <li><strong>{{ vuln.title }}</strong>
+                                                <ul>{% for ref_type, refs in vuln.references.items() %}<li>{{ ref_type | upper }}: {% for r in refs %}<a href="{{ r }}" target="_blank">{{ r }}</a> {% endfor %}</li>{% endfor %}</ul>
+                                            </li>
+                                        {% endfor %}
+                                        </ul>
+                                    {% endif %}
+                                    {% if target_scan_data.data.plugins %}
+                                        <h4>Plugin Vulnerabilities:</h4>
+                                        {% for plugin_slug, plugin_data in target_scan_data.data.plugins.items() %}
+                                            {% if plugin_data.vulnerabilities %}
+                                                <h5>Plugin: {{ plugin_slug }} (Version: {{ plugin_data.version.number | default('N/A') }})</h5>
+                                                <ul>
+                                                {% for vuln in plugin_data.vulnerabilities %}
+                                                    <li><strong>{{ vuln.title }}</strong>
+                                                        <ul>{% for ref_type, refs in vuln.references.items() %}<li>{{ ref_type | upper }}: {% for r in refs %}<a href="{{ r }}" target="_blank">{{ r }}</a> {% endfor %}</li>{% endfor %}</ul>
+                                                    </li>
+                                                {% endfor %}
+                                                </ul>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endif %}
                                 {% elif target_scan_data.error %}
                                     <p>Error: {{ target_scan_data.error }}</p>
                                 {% endif %}
@@ -131,6 +155,46 @@
                                     {% endif %}
                                 {% endif %}
                             {% endfor %}
+                        {% elif module_name == "nmap_results" and module_data.open_ports %}
+                            <h4>Nmap Scan Results</h4>
+                            {% if module_data.os_detection and module_data.os_detection.name %}
+                                <p><strong>OS Detection:</strong> {{ module_data.os_detection.name }} (Accuracy: {{ module_data.os_detection.accuracy }}%)</p>
+                            {% endif %}
+                            <h5>Open Ports:</h5>
+                            <table>
+                                <thead><tr><th>Port</th><th>Protocol</th><th>State</th><th>Service</th><th>Product</th><th>Version</th><th>Extra Info</th></tr></thead>
+                                <tbody>
+                                {% for port in module_data.open_ports %}
+                                    <tr>
+                                        <td>{{ port.portid }}</td>
+                                        <td>{{ port.protocol }}</td>
+                                        <td>{{ port.state }}</td>
+                                        <td>{{ port.service_name }}</td>
+                                        <td>{{ port.product }}</td>
+                                        <td>{{ port.version }}</td>
+                                        <td>{{ port.extrainfo }}</td>
+                                    </tr>
+                                    {% if port.scripts %}
+                                        <tr><td colspan="7">
+                                            <strong>Scripts:</strong>
+                                            <ul>
+                                            {% for script in port.scripts %}
+                                                <li><code class="code">{{ script.id }}</code>: {{ script.output | truncate(200) }}</li>
+                                            {% endfor %}
+                                            </ul>
+                                        </td></tr>
+                                    {% endif %}
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                            {% if module_data.host_scripts %}
+                                <h5>Host Scripts:</h5>
+                                <ul>
+                                {% for script in module_data.host_scripts %}
+                                    <li><code class="code">{{ script.id }}</code>: {{ script.output | truncate(300) }}</li>
+                                {% endfor %}
+                                </ul>
+                            {% endif %}
                         {% elif module_data is mapping %}
                             <pre>{{ module_data | tojson(indent=2) }}</pre>
                         {% else %}
@@ -160,6 +224,18 @@
             {% endfor %}
             </tbody>
         </table>
+
+        {% if tool_errors %}
+        <h2>Tool Execution Errors</h2>
+        <div class="finding-block">
+            <p>The following errors were reported during tool execution:</p>
+            <ul>
+                {% for error in tool_errors %}
+                    <li><code class="code">{{ error }}</code></li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
 
     </div>
     <script>

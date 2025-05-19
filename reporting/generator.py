@@ -236,6 +236,7 @@ def generate_html_report(state, config):
         key=lambda item: SEVERITY_ORDER.get(item[1].get('severity', 'unknown'), 0),
         reverse=True
     )
+    tool_errors_list = full_state.get("tool_errors", []) # Get tool errors
 
     context = {
         "target_info": target_info,
@@ -246,7 +247,8 @@ def generate_html_report(state, config):
         "critical_alerts_summary": critical_alerts_summary_dict, # Summarized dict
         "remediation_suggestions": remediation_suggestions, # Raw dict
         "sorted_remediations": sorted_remediations_list, # Sorted list of tuples
-        "SEVERITY_ORDER": SEVERITY_ORDER # For potential use in template if needed
+        "SEVERITY_ORDER": SEVERITY_ORDER, # For potential use in template if needed
+        "tool_errors": tool_errors_list # Pass tool errors to the template
     }
 
     try:

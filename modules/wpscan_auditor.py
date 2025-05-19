@@ -11,8 +11,10 @@ def run_scan(state, config, target_urls=None): # Added target_urls
     """
     Runs WPScan audit based on the selected profile against single or multiple targets.
     """
-    primary_target_url = state.get_full_state()["scan_metadata"]["target_info"]["url"]
-    profile_name = state.get_full_state()["scan_config_used"].get("profile_name", "default")
+    full_state_data = state.get_full_state()
+    primary_target_url = full_state_data["scan_metadata"]["target_info"]["url"]
+    # Corrected path to scan_config_used
+    profile_name = full_state_data["scan_metadata"]["config_used"].get("profile_name", "default")
     profile = config.get("scan_profiles", {}).get(profile_name, config.get("scan_profiles", {}).get("default", {})) # Ensure profile is dict
     api_token = config.get("api_keys", {}).get("wpscan")
 

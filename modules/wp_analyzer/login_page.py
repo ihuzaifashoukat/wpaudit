@@ -2,8 +2,8 @@ import time
 import re
 from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
-from core.utils import user_confirm
-from .utils import make_request, sanitize_filename
+from core.utils import user_confirm, sanitize_filename # Corrected import
+from .utils import make_request
 
 # Common CAPTCHA footprints (keywords, script sources, class names)
 CAPTCHA_FOOTPRINTS = {

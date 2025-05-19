@@ -12,8 +12,10 @@ def run_scan(state, config, target_urls=None, discovered_paths=None, urls_with_p
     """
     Runs Nuclei scan based on the selected profile against a comprehensive list of targets.
     """
-    primary_target_url = state.get_full_state()["scan_metadata"]["target_info"]["url"] # For fallback
-    profile_name = state.get_full_state()["scan_config_used"].get("profile_name", "default")
+    full_state_data = state.get_full_state()
+    primary_target_url = full_state_data["scan_metadata"]["target_info"]["url"] # For fallback
+    # Corrected path to scan_config_used
+    profile_name = full_state_data["scan_metadata"]["config_used"].get("profile_name", "default")
     profile = config.get("scan_profiles", {}).get(profile_name, config.get("scan_profiles", {}).get("default", {}))
 
     # Consolidate all potential targets for Nuclei

@@ -1,8 +1,20 @@
 import os
 import re
 from datetime import datetime
+import socket # Added for IP resolution
+from urllib.parse import urlparse # Added for get_scan_filename_prefix fallback
 
-def print_dominator_banner():
+def get_target_ip(hostname: str):
+    """Resolves a hostname to an IP address."""
+    try:
+        ip_address = socket.gethostbyname(hostname)
+        print(f"    [i] Resolved {hostname} to IP: {ip_address}")
+        return ip_address
+    except socket.gaierror as e:
+        print(f"    [!] Could not resolve hostname {hostname} to IP: {e}")
+        return None
+
+def print_wpaudit_banner():
     # (Same banner as before)
     print(r"""
   ___  __  __ _____    ___ ____   ___  ____  _____ __  __ ___ ____  _   _ _____ _   _  ____
