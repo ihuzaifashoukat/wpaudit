@@ -1,10 +1,10 @@
-# OmegaScythe Dominator - Project Wiki
+# WPAUDIT - WordPress Security Auditing Suite
 
-Welcome to the OmegaScythe Dominator wiki! This document provides an overview of the project, its features, setup, and usage.
+Welcome to the WPAUDIT wiki! This document provides an overview of the project, its features, setup, and usage.
 
 ## Overview
 
-OmegaScythe Dominator is a hyper-configurable security auditing suite specifically designed for WordPress websites. It automates various scanning and analysis phases to identify potential vulnerabilities and security weaknesses. The tool is built with modularity in mind, allowing users to customize scans based on their needs and the target environment.
+WPAUDIT is a hyper-configurable security auditing suite specifically designed for WordPress websites. It automates various scanning and analysis phases to identify potential vulnerabilities and security weaknesses. The tool is built with modularity in mind, allowing users to customize scans based on their needs and the target environment.
 
 ## Features
 
@@ -37,7 +37,7 @@ The suite relies on several external security tools. Ensure these are installed 
 1.  **Clone the repository:**
     ```bash
     git clone <repository_url>
-    cd omegascythe-dominator # Or your project directory name
+    cd wpaudit # Or your project directory name
     ```
 2.  **Install Python dependencies:**
     ```bash
@@ -120,8 +120,8 @@ The tool executes the following phases in order (unless skipped):
 ## Output and Reporting
 
 *   **Console Output:** Provides real-time feedback during the scan.
-*   **State File:** A JSON file (`scan_state_<hostname>_<timestamp>.json`) is saved in the output directory, containing all collected data from each module. This file is updated after each phase.
-*   **Summary Report:** A human-readable summary report (`scan_summary_<hostname>_<timestamp>.txt` or similar) is generated at the end of the scan in the output directory.
+*   **State File:** A JSON file (`wpaudit_state_<hostname>_<timestamp>.json`) is saved in the output directory, containing all collected data from each module. This file is updated after each phase.
+*   **Summary Report:** A human-readable summary report (`wpaudit_summary_<hostname>_<timestamp>.txt` or similar) is generated at the end of the scan in the output directory.
 
 ## Contributing
 

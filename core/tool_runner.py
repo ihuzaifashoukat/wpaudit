@@ -40,7 +40,7 @@ def run_command(command_list, tool_name, config, timeout=None, capture_output=Tr
 
     final_command_list = [actual_command_path] + command_list[1:]
 
-    default_ua = config.get('default_user_agent', 'OmegaScytheDominator')
+    default_ua = config.get('default_user_agent', 'WPAUDIT')
     final_command_list = [
         str(arg).replace('{DEFAULT_USER_AGENT}', default_ua) if isinstance(arg, str) else str(arg)
         for arg in final_command_list
@@ -100,7 +100,10 @@ def run_command(command_list, tool_name, config, timeout=None, capture_output=Tr
     except subprocess.CalledProcessError as e: # Only if check=True and not live logging
         msg = f"{tool_name}: Command failed with RC {e.returncode}. STDERR: {e.stderr if e.stderr else 'N/A'}"
         print(f"[-] {msg}")
-        if return_proc: return e
+        if return_proc: return e # The CalledProcessError object itself contains stderr
+        # Ensure stderr is included in the message if not returning the full object
+        stderr_snippet = e.stderr.strip()[:200] if e.stderr else "N/A"
+        msg = f"{tool_name}: Command failed with RC {e.returncode}. STDERR: {stderr_snippet}"
     except Exception as e:
         msg = f"{tool_name}: Unexpected error running command - {str(e)[:200]}"
         print(f"[-] {msg}")

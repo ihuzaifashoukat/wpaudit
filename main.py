@@ -46,7 +46,7 @@ def main():
     print_dominator_banner()
 
     parser = argparse.ArgumentParser(
-        description="OmegaScythe Dominator - Hyper-Configurable WordPress Security Auditing Suite.",
+        description="WPAUDIT - Hyper-Configurable WordPress Security Auditing Suite.",
         formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument("target_url", help="Target WordPress URL (e.g., http://example.com)")
@@ -201,7 +201,7 @@ def main():
                     print(f"[+] Collected {len(current_discovered_subdomains)} subdomains. Validating protocols...")
                     validated_subdomain_urls_from_scan = set()
                     validation_timeout = config.get("subdomain_validation_timeout", 5)
-                    request_headers = {"User-Agent": config.get('default_user_agent', 'OmegaScytheDominator')}
+                    request_headers = {"User-Agent": config.get('default_user_agent', 'WPAUDIT')}
 
                     for sub_domain in current_discovered_subdomains:
                         is_validated_sub = False
@@ -265,15 +265,24 @@ def main():
     # --- 5. Finalize and Report ---
     print("\n--- Scan Phases Completed ---")
     state.finalize_scan()
-    save_full_report(state, config) # Save final state
-    generate_summary_report(state, config)
+    save_full_report(state, config) # Save final state (JSON)
+    generate_summary_report(state, config) # Print text summary to console
+    
+    # Attempt to generate HTML report
+    try:
+        from reporting.generator import generate_html_report
+        generate_html_report(state, config)
+    except ImportError:
+        print("[!] Failed to import HTML report generator. Skipping HTML report.")
+    except Exception as e_html:
+        print(f"[!] Error generating HTML report: {e_html}")
 
 
 if __name__ == "__main__":
     try:
         # Check Python version?
         if sys.version_info < (3, 7):
-             print("[!] OmegaScythe requires Python 3.7 or higher.")
+             print("[!] WPAUDIT requires Python 3.7 or higher.")
              sys.exit(1)
         # Check external libraries early?
         try:
@@ -285,7 +294,7 @@ if __name__ == "__main__":
 
         main()
     except KeyboardInterrupt:
-        print("\n\n[!] OmegaScythe Dominator scan aborted by user.")
+        print("\n\n[!] WPAUDIT scan aborted by user.")
         # Attempt final save if state object exists? Difficult to guarantee state here.
         sys.exit(0)
     except Exception as e: # Catch broad exceptions in main setup/teardown

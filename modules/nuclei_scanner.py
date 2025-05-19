@@ -45,7 +45,7 @@ def run_scan(state, config, target_urls=None, discovered_paths=None, urls_with_p
         "-jsonl", "-o", nuclei_output_jsonl,
         "-t", profile.get("nuclei_templates", "technologies/wordpress"), # Use .get with fallback
         "-rl", str(profile.get("nuclei_rate_limit", 150)), # Use .get with fallback
-        "-H", f"User-Agent: {config.get('default_user_agent', 'OmegaScytheDominator')}" # Use .get with fallback
+        "-H", f"User-Agent: {config.get('default_user_agent', 'WPAUDIT')}" # Use .get with fallback
     ]
 
     # Add target(s) using -u or -l

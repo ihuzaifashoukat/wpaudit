@@ -1,7 +1,9 @@
-import json
+import orjson # Changed from json
 from datetime import datetime
 import os
-import threading # To make state access potentially thread-safe if needed later
+import threading
+import shutil # For backing up state file
+import copy # For deepcopy in get_full_state
 
 class ScanState:
     """
@@ -26,14 +28,17 @@ class ScanState:
             "remediation_suggestions": {}, # Key: unique finding ID, Value: dict with details
             "tool_errors": []
         }
-        self.output_dir = config_used.get('settings', {}).get('output_dir', 'omegascythe_dominator_reports')
+        # Ensure 'settings' exists in config_used or provide a default dict
+        settings = config_used.get('settings', {})
+        self.output_dir = settings.get('output_dir', 'wpaudit_reports') # Updated default
         self._ensure_output_dir()
 
 
     def _generate_prefix(self, target_info, config_used):
         """Generates the unique file prefix for this scan run."""
-        output_dir = config_used.get('settings', {}).get('output_dir', 'omegascythe_dominator_reports')
-        report_prefix = config_used.get('settings', {}).get('report_prefix', 'osd_report')
+        settings = config_used.get('settings', {}) # Ensure 'settings' exists
+        output_dir = settings.get('output_dir', 'wpaudit_reports') # Updated default
+        report_prefix = settings.get('report_prefix', 'wpaudit_report') # Updated default
         hostname = target_info.get("sanitized_hostname", "unknown_target")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return os.path.join(output_dir, f"{report_prefix}_{hostname}_{timestamp}")
@@ -121,21 +126,49 @@ class ScanState:
             return copy.deepcopy(self._state)
 
     def save_state(self):
-        """Saves the current state to the primary JSON report file."""
+        """Saves the current state to the primary JSON report file using orjson."""
         filepath = f"{self.get_report_file_prefix()}_FULL_REPORT.json"
-        current_state = self.get_full_state() # Get a thread-safe copy
+        backup_filepath = f"{filepath}.bak"
+        current_state_data = self.get_full_state() # Get a thread-safe copy
+
+        # Create backup of existing state file
+        if os.path.exists(filepath):
+            try:
+                shutil.copy2(filepath, backup_filepath)
+                # print(f"[i] Backed up existing state file to: {backup_filepath}") # Optional: verbose logging
+            except Exception as e_backup:
+                print(f"[!] Warning: Could not create backup of state file '{filepath}': {e_backup}")
+        
         try:
-            with open(filepath, 'w') as f:
-                json.dump(current_state, f, indent=4, default=lambda o: '<not serializable>')
-            # Optional: print confirmation only periodically or at the end
-            # print(f"[+] Scan state saved: {filepath}")
+            # orjson expects bytes, so we encode to UTF-8.
+            # OPT_INDENT_2 provides pretty printing.
+            # default is used for objects orjson can't serialize directly (e.g. datetime if not handled)
+            # However, our datetime objects are already ISO strings.
+            json_bytes = orjson.dumps(current_state_data, option=orjson.OPT_INDENT_2)
+            with open(filepath, 'wb') as f: # Open in binary mode for orjson
+                f.write(json_bytes)
+            # print(f"[+] Scan state saved: {filepath}") # Optional: verbose logging
         except Exception as e:
-            print(f"[!] Error saving scan state to '{filepath}': {e}")
+            print(f"[!!!] Error saving scan state to '{filepath}' using orjson: {e}")
+            # Attempt to restore from backup if save failed
+            if os.path.exists(backup_filepath):
+                try:
+                    shutil.copy2(backup_filepath, filepath)
+                    print(f"[i] Restored state file from backup: {backup_filepath}")
+                except Exception as e_restore:
+                    print(f"[!!!] CRITICAL: Failed to restore state file from backup '{backup_filepath}': {e_restore}")
+
 
 # Example usage
 if __name__ == "__main__":
     # Mock config and target info
-    mock_config_used = {"settings": {"output_dir": "test_state_reports", "report_prefix": "test_scan"}}
+    # Ensure 'settings' key exists as per new expectation in _generate_prefix and __init__
+    mock_config_used = {
+        "settings": {
+            "output_dir": "test_state_reports", 
+            "report_prefix": "test_scan"
+        }
+    }
     mock_target_info = {"url": "http://example.com", "hostname": "example.com", "ip": "93.184.216.34", "sanitized_hostname": "example_com"}
 
     state = ScanState(mock_target_info, mock_config_used)
@@ -147,5 +180,10 @@ if __name__ == "__main__":
     state.finalize_scan()
     state.save_state()
 
-    print("\n--- Example Scan State ---")
-    print(json.dumps(state.get_full_state(), indent=4, default=str))
+    print("\n--- Example Scan State (using orjson for potential binary output in real use) ---")
+    # For printing, we might still use standard json if orjson output is bytes
+    try:
+        print(orjson.dumps(state.get_full_state(), option=orjson.OPT_INDENT_2).decode())
+    except Exception: # Fallback if orjson specific options cause issues with print
+        import json
+        print(json.dumps(state.get_full_state(), indent=2, default=str))

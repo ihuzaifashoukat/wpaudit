@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WPAUDIT Scan Report: {{ target_info.url }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2, h3 { color: #333; }
+        h1 { border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+        h2 { border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 30px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f0f0f0; }
+        .severity-critical { color: red; font-weight: bold; }
+        .severity-high { color: orange; font-weight: bold; }
+        .severity-medium { color: #b08000; } /* Dark Yellow */
+        .severity-low { color: #337ab7; } /* Blueish */
+        .severity-info { color: #5cb85c; } /* Greenish */
+        .code { background-color: #eef; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+        .finding-block { margin-bottom: 15px; padding: 10px; border: 1px solid #eee; border-radius: 4px; }
+        .finding-title { font-weight: bold; }
+        .remediation { margin-top: 5px; padding: 8px; background-color: #f9f9f9; border-left: 3px solid #5cb85c;}
+        .collapsible { background-color: #777; color: white; cursor: pointer; padding: 10px; width: 100%; border: none; text-align: left; outline: none; font-size: 16px; margin-top:10px; border-radius: 4px;}
+        .active, .collapsible:hover { background-color: #555; }
+        .content { padding: 0 18px; max-height: 0; overflow: hidden; transition: max-height 0.2s ease-out; background-color: #f9f9f9; border: 1px solid #ddd; border-top:none;}
+        .module-findings { margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WPAUDIT Security Scan Report</h1>
+        
+        <h2>Scan Overview</h2>
+        <p><strong>Target URL:</strong> {{ target_info.url }}</p>
+        <p><strong>Target IP:</strong> {{ target_info.ip | default('N/A') }}</p>
+        <p><strong>Scan Profile:</strong> {{ scan_config_used.profile_name | default('N/A') }}</p>
+        <p><strong>Scan Started:</strong> {{ scan_metadata.start_time | default('N/A') }}</p>
+        <p><strong>Scan Ended:</strong> {{ scan_metadata.end_time | default('N/A') }}</p>
+
+        <h2>Executive Summary</h2>
+        <p>This report outlines the findings from the WPAUDIT security scan. Review all findings, especially those marked Critical or High severity.</p>
+        {% if critical_alerts %}
+            <h3>Critical Alerts Summary</h3>
+            <ul>
+                {% for alert_msg, count in critical_alerts_summary.items() %}
+                    <li>{{ alert_msg }}: {{ count }} instance(s)</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No critical alerts were automatically flagged during this scan. Manual review of all findings is essential.</p>
+        {% endif %}
+
+        <h2>Prioritized Remediation (Top 5)</h2>
+        {% if sorted_remediations %}
+            <ol>
+            {% for finding_id, details in sorted_remediations[:5] %}
+                <li>
+                    <span class="severity-{{ details.severity | lower }}">{{ details.severity | upper }}</span> - 
+                    <strong>{{ details.source | default('Unknown Source') }}:</strong> 
+                    {{ details.description | truncate(150) }}
+                    <div class="remediation"><strong>Remediation:</strong> {{ details.remediation }}</div>
+                </li>
+            {% endfor %}
+            </ol>
+            {% if sorted_remediations | length > 5 %}<p><em>... and {{ (sorted_remediations | length) - 5 }} more. See full details below or in the JSON report.</em></p>{% endif %}
+        {% else %}
+            <p>No specific high-priority remediation actions were automatically generated. Manual review of all findings is essential.</p>
+        {% endif %}
+
+        <h2>Detailed Findings by Module</h2>
+        {% for module_name, module_data in findings.items() %}
+            {% if module_data and module_data.status and module_data.status != "Not Run" and module_data.status != "Skipped (No Queries)" and module_data.status != "Disabled in Config" %}
+                <button type="button" class="collapsible">{{ module_name | replace("_", " ") | title }} (Status: {{ module_data.status }})</button>
+                <div class="content">
+                    <div class="module-findings">
+                        {% if module_name == "wpscan_results" and module_data.targets %}
+                            {% for target_url, target_scan_data in module_data.targets.items() %}
+                                <h3>WPScan: {{ target_url }}</h3>
+                                {% if target_scan_data.data %}
+                                    <p><strong>Version:</strong> {{ target_scan_data.data.version.number | default('N/A') }} (Status: {{ target_scan_data.data.version.status | default('N/A') }})</p>
+                                    {% if target_scan_data.data.version.vulnerabilities %}
+                                        <h4>Core Vulnerabilities:</h4>
+                                        <ul>
+                                        {% for vuln in target_scan_data.data.version.vulnerabilities %}
+                                            <li><strong>{{ vuln.title }}</strong>
+                                                <ul>{% for ref_type, refs in vuln.references.items() %}<li>{{ ref_type | upper }}: {% for r in refs %}<a href="{{ r }}" target="_blank">{{ r }}</a> {% endfor %}</li>{% endfor %}</ul>
+                                            </li>
+                                        {% endfor %}
+                                        </ul>
+                                    {% endif %}
+                                    <!-- Add similar sections for themes, plugins -->
+                                {% elif target_scan_data.error %}
+                                    <p>Error: {{ target_scan_data.error }}</p>
+                                {% endif %}
+                            {% endfor %}
+                        {% elif module_name == "nuclei_results" and module_data.findings %}
+                             <p>Found {{ module_data.findings | length }} potential issues.</p>
+                             {% for finding in module_data.findings %}
+                                <div class="finding-block">
+                                    <p class="finding-title"><span class="severity-{{ finding.info.severity | lower }}">{{ finding.info.severity | upper }}</span>: {{ finding.info.name }}</p>
+                                    <p><strong>Description:</strong> {{ finding.info.description | default('N/A') }}</p>
+                                    <p><strong>Matched At:</strong> <code class="code">{{ finding.get('matched-at', 'N/A') }}</code></p>
+                                    <p><strong>Template ID:</strong> {{ finding.get('template-id') }}</p>
+                                    {% if finding.info.tags %}<p><strong>Tags:</strong> {{ finding.info.tags | join(', ') }}</p>{% endif %}
+                                    {% if finding.info.reference %}<p><strong>References:</strong> {% for ref in finding.info.reference %}<a href="{{ ref }}" target="_blank">{{ ref }}</a> {% endfor %}</p>{% endif %}
+                                    {% if finding.info.remediation %}<div class="remediation"><strong>Remediation:</strong> {{ finding.info.remediation }}</div>{% endif %}
+                                </div>
+                             {% endfor %}
+                        {% elif module_name == "exploit_intelligence" and module_data.found_exploits_correlated %}
+                            {% for component_key, exploit_info in module_data.found_exploits_correlated.items() %}
+                                {% if exploit_info.searchsploit or exploit_info.metasploit %}
+                                    <h4>Exploits for: {{ component_key }}</h4>
+                                    {% if exploit_info.associated_cves %}<p>Associated CVEs: {{ exploit_info.associated_cves | join(', ') }}</p>{% endif %}
+                                    {% if exploit_info.searchsploit %}
+                                        <h5>SearchSploit:</h5>
+                                        <ul>
+                                        {% for ss_exploit in exploit_info.searchsploit %}
+                                            <li>{{ ss_exploit.title }} (EDB-ID: {{ ss_exploit['EDB-ID'] }}) - Path: <code class="code">{{ ss_exploit.path }}</code> - Confidence: {{ ss_exploit.confidence | default('N/A') }}</li>
+                                        {% endfor %}
+                                        </ul>
+                                    {% endif %}
+                                    {% if exploit_info.metasploit %}
+                                        <h5>Metasploit:</h5>
+                                        <ul>
+                                        {% for msf_exploit in exploit_info.metasploit %}
+                                            <li>{{ msf_exploit.description }} (Path: <code class="code">{{ msf_exploit.path }}</code> - Rank: {{ msf_exploit.rank }})</li>
+                                        {% endfor %}
+                                        </ul>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        {% elif module_data is mapping %}
+                            <pre>{{ module_data | tojson(indent=2) }}</pre>
+                        {% else %}
+                            <p>{{ module_data }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+        {% endfor %}
+        
+        <h2>All Remediation Suggestions</h2>
+        <table>
+            <thead>
+                <tr><th>ID</th><th>Severity</th><th>Source</th><th>Description</th><th>Remediation</th></tr>
+            </thead>
+            <tbody>
+            {% for finding_id, details in sorted_remediations %}
+                <tr>
+                    <td>{{ finding_id }}</td>
+                    <td class="severity-{{ details.severity | lower }}">{{ details.severity | upper }}</td>
+                    <td>{{ details.source | default('N/A') }}</td>
+                    <td>{{ details.description }}</td>
+                    <td>{{ details.remediation }}</td>
+                </tr>
+            {% else %}
+                <tr><td colspan="5">No specific remediation suggestions generated.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+    </div>
+    <script>
+        var coll = document.getElementsByClassName("collapsible");
+        for (var i = 0; i < coll.length; i++) {
+            coll[i].addEventListener("click", function() {
+                this.classList.toggle("active");
+                var content = this.nextElementSibling;
+                if (content.style.maxHeight){
+                    content.style.maxHeight = null;
+                } else {
+                    content.style.maxHeight = content.scrollHeight + "px";
+                } 
+            });
+        }
+    </script>
+</body>
+</html>

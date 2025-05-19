@@ -1,6 +1,8 @@
 import json
 import os
 from datetime import datetime
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+from core.utils import get_scan_filename_prefix # To get consistent report names
 
 # Basic severity mapping (can be expanded)
 SEVERITY_ORDER = {"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1, "unknown": 0}
@@ -22,7 +24,7 @@ def generate_summary_report(state, config):
     remediation_suggestions = full_state.get("remediation_suggestions", {})
     config_used = full_state.get("scan_config_used", {})
 
-    print("\n" + "="*40 + " OMEGASCYTHE DOMINATOR - EXECUTIVE SUMMARY " + "="*40)
+    print("\n" + "="*40 + " WPAUDIT - EXECUTIVE SUMMARY " + "="*40)
     print(f"Audit Target: {target_info.get('url')} (IP: {target_info.get('ip', 'N/A')})")
     print(f"Scan Profile Used: {config_used.get('profile_name', 'N/A')}")
     print(f"Scan Started: {scan_metadata.get('start_time')}")
@@ -202,5 +204,76 @@ def generate_summary_report(state, config):
     print("  - Patch Management, Input Validation, Secure Configuration, WAF, Log Review, Least Privilege, Regular Audits.")
 
     print("\n" + "="*45 + " END OF SUMMARY " + "="*45)
-    print(f"\n[INFO] Full detailed findings in JSON: {state.get_report_file_prefix()}_FULL_REPORT.json")
+    # Use get_scan_filename_prefix for consistent naming with other reports
+    base_report_name = state.get_report_file_prefix() # This method should exist in ScanState or be passed
+    if not base_report_name: # Fallback if state method not available yet
+        base_report_name = get_scan_filename_prefix(state, config)
+
+    print(f"\n[INFO] Full detailed findings in JSON: {base_report_name}_FULL_REPORT.json")
+    print(f"[INFO] HTML report generated: {base_report_name}_REPORT.html")
     print("[INFO] Individual tool logs are also in the output directory: " + config["output_dir"])
+
+def generate_html_report(state, config):
+    """Generates an HTML report from the scan state."""
+    full_state = state.get_full_state()
+    scan_metadata = full_state.get("scan_metadata", {})
+    target_info = scan_metadata.get("target_info", {})
+    findings = full_state.get("findings", {})
+    critical_alerts = full_state.get("critical_alerts", [])
+    remediation_suggestions = full_state.get("remediation_suggestions", {})
+    config_used = full_state.get("scan_config_used", {})
+
+    # Prepare context for Jinja2 template
+    # Critical alerts summary (as used in text summary)
+    critical_alerts_summary_dict = {}
+    for alert_msg in critical_alerts:
+        key = alert_msg.split(':')[0].strip()[:50]
+        critical_alerts_summary_dict[key] = critical_alerts_summary_dict.get(key, 0) + 1
+    
+    # Sorted remediations (as used in text summary)
+    sorted_remediations_list = sorted(
+        remediation_suggestions.items(),
+        key=lambda item: SEVERITY_ORDER.get(item[1].get('severity', 'unknown'), 0),
+        reverse=True
+    )
+
+    context = {
+        "target_info": target_info,
+        "scan_metadata": scan_metadata,
+        "scan_config_used": config_used,
+        "findings": findings, # Pass all findings, template can iterate
+        "critical_alerts": critical_alerts, # Raw list
+        "critical_alerts_summary": critical_alerts_summary_dict, # Summarized dict
+        "remediation_suggestions": remediation_suggestions, # Raw dict
+        "sorted_remediations": sorted_remediations_list, # Sorted list of tuples
+        "SEVERITY_ORDER": SEVERITY_ORDER # For potential use in template if needed
+    }
+
+    try:
+        # Setup Jinja2 environment
+        # Assuming report_template.html is in the same directory as generator.py
+        # For robustness, use absolute path or path relative to a known base dir
+        template_dir = os.path.dirname(os.path.abspath(__file__))
+        env = Environment(
+            loader=FileSystemLoader(template_dir),
+            autoescape=select_autoescape(['html', 'xml'])
+        )
+        template = env.get_template("report_template.html")
+        html_output = template.render(context)
+
+        # Determine output filename
+        base_report_name = state.get_report_file_prefix()
+        if not base_report_name:
+             base_report_name = get_scan_filename_prefix(state, config) # Fallback
+        
+        html_report_path = f"{base_report_name}_REPORT.html"
+        
+        with open(html_report_path, 'w', encoding='utf-8') as f_html:
+            f_html.write(html_output)
+        print(f"[+] HTML report successfully generated: {html_report_path}")
+        return html_report_path
+    except Exception as e:
+        print(f"[!!!] Error generating HTML report: {e}")
+        import traceback
+        traceback.print_exc()
+        return None

@@ -43,44 +43,106 @@ def check_wp_debug_exposure(state, config, target_url):
     # Future enhancement: Add paths discovered by directory bruteforcer or sitemap scanner
 
     # Ensure exposed_on_pages list exists
-    if "exposed_on_pages" not in debug_exposure_details:
+    if "exposed_on_pages" not in debug_exposure_details: # For PHP error messages
         debug_exposure_details["exposed_on_pages"] = []
-    exposed_pages_list = debug_exposure_details["exposed_on_pages"]
+    if "exposed_debug_log_url" not in debug_exposure_details: # For debug.log
+        debug_exposure_details["exposed_debug_log_url"] = None
+    if "query_monitor_footprints" not in debug_exposure_details: # For Query Monitor
+        debug_exposure_details["query_monitor_footprints"] = {"detected_on_pages": [], "details": []}
 
-    found_exposure = False # Flag to track if any exposure was found
+    exposed_php_error_pages = debug_exposure_details["exposed_on_pages"]
+    found_php_error_exposure = False
 
+    print("    [i] Checking for PHP error message exposure (WP_DEBUG)...")
     for page_url in pages_to_check:
-        print(f"    Checking WP_DEBUG exposure on: {page_url}")
-        response = make_request(page_url, config, method="GET")
-        if response and response.text:
-            page_found_exposure = False
-            for pattern in compiled_patterns:
-                # Search for any of the debug patterns in the response body
-                if pattern.search(response.text):
-                    print(f"    [!!!] Potential WP_DEBUG error exposure found on: {page_url}")
-                    # Avoid adding duplicate URLs
-                    if page_url not in exposed_pages_list:
-                        exposed_pages_list.append(page_url)
-                    found_exposure = True
-                    page_found_exposure = True
-                    # Add remediation suggestion only once per finding type, but alert for each page
-                    state.add_critical_alert(f"WP_DEBUG errors potentially exposed on {page_url}")
-                    state.add_remediation_suggestion(f"wp_debug_exposed", { # Use a general key for the suggestion
-                        "source": "WP Analyzer",
-                        "description": f"PHP error messages (indicative of WP_DEBUG=true and display_errors=On) found on one or more pages (e.g., {page_url}). This can leak sensitive information like file paths or database query details.",
-                        "severity": "Medium",
-                        "remediation": "Ensure WP_DEBUG, WP_DEBUG_LOG, and WP_DEBUG_DISPLAY are set to false on production sites. Configure PHP to log errors to a file instead of displaying them publicly (log_errors = On, display_errors = Off)."
-                    })
-                    break # Found an error on this page, no need to check other patterns for it
-            # if not page_found_exposure:
-            #     print(f"      [+] No obvious WP_DEBUG errors found on {page_url}") # Optional positive confirmation
+        print(f"      Checking for PHP errors on: {page_url}")
+        try:
+            response = make_request(page_url, config, method="GET", timeout=7)
+            if response and response.text:
+                page_found_php_error = False
+                for pattern in compiled_patterns:
+                    if pattern.search(response.text):
+                        print(f"        [!!!] Potential PHP error (WP_DEBUG) exposure found on: {page_url}")
+                        if page_url not in exposed_php_error_pages:
+                            exposed_php_error_pages.append(page_url)
+                        found_php_error_exposure = True
+                        page_found_php_error = True
+                        # Remediation suggestion added once later if found_php_error_exposure is true
+                        break 
+                # Query Monitor check on this page's content
+                qm_comments = re.findall(r"<!-- Query Monitor.*?-->|<!-- QM.*?-->", response.text, re.DOTALL)
+                qm_ids_classes = re.findall(r"id=['\"]query-monitor(-.+)?['\"]|class=['\"]qm(-.+)?['\"]", response.text)
+                if qm_comments or qm_ids_classes:
+                    print(f"        [!] Query Monitor footprints detected on: {page_url}")
+                    if page_url not in debug_exposure_details["query_monitor_footprints"]["detected_on_pages"]:
+                        debug_exposure_details["query_monitor_footprints"]["detected_on_pages"].append(page_url)
+                    if qm_comments and "Query Monitor HTML output" not in debug_exposure_details["query_monitor_footprints"]["details"]:
+                         debug_exposure_details["query_monitor_footprints"]["details"].append("Query Monitor HTML output (comments) found.")
+                    if qm_ids_classes and "Query Monitor CSS IDs/classes found." not in debug_exposure_details["query_monitor_footprints"]["details"]:
+                         debug_exposure_details["query_monitor_footprints"]["details"].append("Query Monitor CSS IDs/classes found.")
+        except Exception as e:
+            print(f"        [-] Error checking page {page_url} for debug exposure: {e}")
 
-    debug_exposure_details["exposed_on_pages"] = exposed_pages_list
-    if found_exposure:
-        debug_exposure_details["status"] = "Potentially Exposed"
-    else:
+    debug_exposure_details["exposed_on_pages"] = exposed_php_error_pages
+    if found_php_error_exposure:
+        state.add_critical_alert(f"WP_DEBUG errors potentially exposed on one or more pages.")
+        state.add_remediation_suggestion("wp_debug_php_errors_exposed", {
+            "source": "WP Analyzer (Debug Exposure)",
+            "description": f"PHP error messages (indicative of WP_DEBUG=true and display_errors=On) found on pages like: {', '.join(exposed_php_error_pages[:2])}{'...' if len(exposed_php_error_pages)>2 else ''}. This can leak sensitive information.",
+            "severity": "Medium",
+            "remediation": "Ensure WP_DEBUG and WP_DEBUG_DISPLAY are false on production. Log errors to a private file (WP_DEBUG_LOG true, but ensure log file is not web accessible)."
+        })
+
+    # Check for publicly accessible debug.log
+    print("    [i] Checking for publicly accessible wp-content/debug.log...")
+    debug_log_url = urljoin(target_url, "wp-content/debug.log")
+    try:
+        log_response = make_request(debug_log_url, config, method="GET", timeout=7)
+        if log_response and log_response.status_code == 200 and log_response.text:
+            # Check if it looks like a log file (e.g., contains timestamps, PHP errors)
+            if re.search(r"\[\d{2}-[A-Za-z]{3}-\d{4} \d{2}:\d{2}:\d{2}(?: UTC)?\] PHP", log_response.text):
+                print(f"    [!!!] Publicly accessible debug.log found and contains data: {debug_log_url}")
+                debug_exposure_details["exposed_debug_log_url"] = debug_log_url
+                state.add_critical_alert(f"Publicly accessible debug.log found: {debug_log_url}")
+                state.add_remediation_suggestion("wp_debug_log_exposed", {
+                    "source": "WP Analyzer (Debug Exposure)",
+                    "description": f"The WordPress debug log file (wp-content/debug.log) is publicly accessible at {debug_log_url} and contains debug information. This is a critical information leak.",
+                    "severity": "High",
+                    "remediation": "Ensure WP_DEBUG_LOG is true ONLY for debugging, and if so, protect the debug.log file from public web access (e.g., via .htaccess or server configuration). Delete old log files if not needed. Ideally, disable WP_DEBUG_LOG on production."
+                })
+            else:
+                print(f"      [?] {debug_log_url} is accessible but doesn't look like a typical debug.log or is empty.")
+        elif log_response and log_response.status_code != 404:
+             print(f"      [i] {debug_log_url} returned status {log_response.status_code} (not 200 or 404).")
+        else: # 404 or request failed
+            print(f"      [+] No publicly accessible debug.log found at {debug_log_url} (or request failed).")
+    except Exception as e:
+        print(f"      [-] Error checking for debug.log: {e}")
+
+
+    # Consolidate status
+    final_details_parts = []
+    if found_php_error_exposure:
+        final_details_parts.append(f"PHP errors exposed on {len(exposed_php_error_pages)} page(s).")
+    if debug_exposure_details["exposed_debug_log_url"]:
+        final_details_parts.append("Public debug.log found.")
+    if debug_exposure_details["query_monitor_footprints"]["detected_on_pages"]:
+        final_details_parts.append(f"Query Monitor footprints on {len(debug_exposure_details['query_monitor_footprints']['detected_on_pages'])} page(s).")
+        state.add_remediation_suggestion("query_monitor_exposed", {
+            "source": "WP Analyzer (Debug Exposure)",
+            "description": f"Query Monitor plugin footprints detected. If its output is visible to unauthenticated users or on production, it can leak sensitive information.",
+            "severity": "Low", # Can be higher if actual data is shown
+            "remediation": "Ensure Query Monitor (or similar debugging plugins) are configured to only display output to authenticated administrators, or are disabled on production sites."
+        })
+
+
+    if not final_details_parts:
         debug_exposure_details["status"] = "Likely Not Exposed"
-        print("    [+] No obvious signs of WP_DEBUG error exposure found on checked pages.")
+        print("    [+] No obvious signs of common debug information exposure found.")
+    else:
+        debug_exposure_details["status"] = "Potential Exposure Found"
+    
+    debug_exposure_details["details_summary"] = " ".join(final_details_parts) if final_details_parts else "No specific debug exposures identified by these checks."
 
     analyzer_findings["wp_debug_exposure"] = debug_exposure_details
     state.update_module_findings(module_key, analyzer_findings)

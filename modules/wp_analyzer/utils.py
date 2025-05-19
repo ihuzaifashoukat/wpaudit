@@ -10,7 +10,7 @@ def make_request(url, config, method="GET", data=None, allow_redirects=True):
         return requests.request(
             method, url, data=data,
             timeout=config.get("requests_timeout", 15),
-            headers={"User-Agent": config.get("default_user_agent", "OmegaScytheDominator")},
+            headers={"User-Agent": config.get("default_user_agent")},
             verify=False, # Common setting in security tools, but be aware of risks
             allow_redirects=allow_redirects
         )

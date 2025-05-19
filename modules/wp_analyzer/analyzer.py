@@ -81,50 +81,87 @@ def run_analysis(state, config):
 
     # --- Run Sub-Analyses ---
     # Each function is responsible for updating its part of the state findings.
+    # Structure: (Name, function, phase_marker, condition_lambda (optional))
+    # condition_lambda: A function that takes (state, config) and returns True if the step should run.
+
+    # Helper to check conditions, can be expanded
+    def should_run_multisite(current_state, current_config):
+        # Placeholder: In a real scenario, this would check WPScan results or other indicators
+        # For now, assume it's enabled by a config flag or always runs if module is present
+        is_multisite_detected = current_state.get_module_findings("wpscan_results", {}).get("is_multisite", False) # Example dependency
+        if is_multisite_detected:
+            print("    [i] Condition met: Multisite detected, proceeding with multisite checks.")
+            return True
+        print("    [i] Condition not met: Multisite not detected by WPScan (example). Skipping multisite-specific checks.")
+        # Update multisite findings to "Skipped (Not Multisite)"
+        ms_findings = current_state.get_module_findings(module_key, {}).get("multisite_analysis", {})
+        ms_findings["status"] = "Skipped (Not Detected as Multisite)"
+        ms_findings["details"] = "Skipped as WordPress instance was not identified as a multisite setup by preceding scans."
+        current_state.update_specific_finding(module_key, "multisite_analysis", ms_findings)
+        return False
+
+    def is_rest_api_generally_accessible(current_state, current_config):
+        # Placeholder: Check if REST API user enum found anything or if /wp-json/ is not 403/404
+        rest_api_findings = current_state.get_module_findings(module_key, {}).get("rest_api_user_enum", {})
+        # A simple check: if the status isn't "Not Checked" and not explicitly an error that implies total inaccessibility.
+        # This is a basic heuristic. A better check would be to see if /wp-json/ itself returns a valid JSON response.
+        if rest_api_findings.get("status") not in ["Not Checked", "Skipped (Not Found)", "Error (Access Denied)"]: # Example statuses
+            print("    [i] Condition met: REST API seems generally accessible, proceeding with related checks.")
+            return True
+        print("    [i] Condition not met: REST API does not seem generally accessible. Skipping some REST-dependent checks.")
+        return False
+
 
     analysis_steps = [
-        ("Security Headers", analyze_security_headers, "analyzer_sec_headers"),
-        ("User Registration & Roles", analyze_user_registration, "analyzer_user_reg"),
-        ("XML-RPC Interface", analyze_xml_rpc, "analyzer_xml_rpc"),
-        ("Sensitive File Exposures", check_sensitive_file_exposure, "analyzer_file_exposure"),
-        ("Login Page", analyze_login_page, "analyzer_login_page"),
-        ("Directory Listing", check_directory_listing, "analyzer_dir_listing"),
-        ("WP_DEBUG Exposure", check_wp_debug_exposure, "analyzer_wp_debug"),
-        ("REST API User Enumeration", analyze_rest_api_user_enum, "analyzer_rest_user_enum"),
-        ("AJAX Action Analysis", analyze_ajax_actions, "analyzer_ajax_actions"),
-        ("Theme/Plugin Vulnerabilities", analyze_extensions, "analyzer_extensions"), # Added extension scanner step
-        ("Core Version & Vulnerabilities", analyze_core_version, "analyzer_core_vuln"), # Added core vuln checker step
-        ("Contextual XSS Checks", analyze_xss, "analyzer_xss"), # Added XSS checker step
-        ("Contextual SQLi Checks", analyze_sqli, "analyzer_sqli"), # Added SQLi checker step
-        ("Contextual SSRF Checks", analyze_ssrf, "analyzer_ssrf"), # Added SSRF checker step
-        ("File Inclusion Checks (LFI/RFI)", analyze_file_inclusion, "analyzer_file_inclusion"), # Added File Inclusion checker step
-        ("Configuration Audit", analyze_configuration, "analyzer_config_audit"), # Added Config Audit checker step
-        ("Authentication Hardening", analyze_auth_hardening, "analyzer_auth_hardening"), # Added Auth Hardening step
-        ("Advanced User Enumeration", analyze_advanced_user_enum, "analyzer_adv_user_enum"), # Added Advanced User Enum step
-        ("Admin Area Security", analyze_admin_area_security, "analyzer_admin_sec"), # Added Admin Area Security step
-        ("Comment Security", analyze_comment_security, "analyzer_comment_sec"), # Added Comment Security step
-        ("Custom Endpoint Fuzzing", analyze_custom_endpoints, "analyzer_custom_fuzz"), # Added Custom Endpoint Fuzzer step
-        ("Cron Job Analysis", analyze_cron, "analyzer_cron"), # Added Cron checker step
-        ("Multisite Specific Checks", analyze_multisite, "analyzer_multisite"), # Added Multisite checker step
-        # Add other analyses here if implemented
+        ("Security Headers", analyze_security_headers, "analyzer_sec_headers", None),
+        ("User Registration & Roles", analyze_user_registration, "analyzer_user_reg", None),
+        ("XML-RPC Interface", analyze_xml_rpc, "analyzer_xml_rpc", None),
+        ("Sensitive File Exposures", check_sensitive_file_exposure, "analyzer_file_exposure", None),
+        ("Login Page", analyze_login_page, "analyzer_login_page", None),
+        ("Directory Listing", check_directory_listing, "analyzer_dir_listing", None),
+        ("WP_DEBUG Exposure", check_wp_debug_exposure, "analyzer_wp_debug", None),
+        ("REST API User Enumeration", analyze_rest_api_user_enum, "analyzer_rest_user_enum", None), # Runs first to inform others
+        ("AJAX Action Analysis", analyze_ajax_actions, "analyzer_ajax_actions", None),
+        ("Theme/Plugin Vulnerabilities", analyze_extensions, "analyzer_extensions", None),
+        ("Core Version & Vulnerabilities", analyze_core_version, "analyzer_core_vuln", None),
+        ("Contextual XSS Checks", analyze_xss, "analyzer_xss", None),
+        ("Contextual SQLi Checks", analyze_sqli, "analyzer_sqli", None),
+        ("Contextual SSRF Checks", analyze_ssrf, "analyzer_ssrf", None),
+        ("File Inclusion Checks (LFI/RFI)", analyze_file_inclusion, "analyzer_file_inclusion", None),
+        ("Configuration Audit", analyze_configuration, "analyzer_config_audit", None),
+        ("Authentication Hardening", analyze_auth_hardening, "analyzer_auth_hardening", None),
+        ("Advanced User Enumeration", analyze_advanced_user_enum, "analyzer_adv_user_enum", None),
+        ("Admin Area Security", analyze_admin_area_security, "analyzer_admin_sec", None),
+        ("Comment Security", analyze_comment_security, "analyzer_comment_sec", None),
+        ("Custom Endpoint Fuzzing", analyze_custom_endpoints, "analyzer_custom_fuzz", is_rest_api_generally_accessible), # Example conditional
+        ("Cron Job Analysis", analyze_cron, "analyzer_cron", None),
+        ("Multisite Specific Checks", analyze_multisite, "analyzer_multisite", should_run_multisite), # Example conditional
     ]
 
-    for name, func, phase_marker in analysis_steps:
-        try:
-            print(f"\n  --- Analyzing {name} ---")
-            func(state, config, target_url) # Call the specific analysis function
-            state.mark_phase_executed(phase_marker) # Mark individual sub-phase
-        except Exception as e:
-            print(f"    [-] Error during {name} analysis: {e}")
-            # Log the error in the specific sub-module's findings if possible,
-            # otherwise log a general error for the wp_analyzer module.
-            # Example: Update the status of the specific finding key if known.
-            # This requires mapping the function/name back to the findings key.
-            # For simplicity, we can log a general error note here.
-            state.add_error_log(module_key, f"Error in {name}: {e}")
-            # Optionally update the status for the specific finding key if easily mappable
-            # e.g., if name == "Security Headers": state.update_module_findings(...)
+    for name, func, phase_marker, condition_func in analysis_steps:
+        run_step = True
+        if condition_func:
+            try:
+                run_step = condition_func(state, config)
+            except Exception as ce:
+                print(f"    [-] Error evaluating condition for '{name}': {ce}. Skipping step.")
+                run_step = False
+        
+        if run_step:
+            try:
+                print(f"\n  --- Analyzing {name} ---")
+                func(state, config, target_url) # Call the specific analysis function
+                state.mark_phase_executed(phase_marker) # Mark individual sub-phase
+            except Exception as e:
+                print(f"    [-] Error during {name} analysis: {e}")
+                state.add_error_log(module_key, f"Error in {name} analysis module: {type(e).__name__} - {e}")
+                # Update the specific finding for this sub-module to reflect the error
+                # This requires a mapping from 'name' or 'func' to the actual key in `default_analyzer_findings`
+                # For now, this is a general error. Individual modules should set their own status to "Error" on failure.
+        else:
+            print(f"    Skipping '{name}' due to unmet conditions or conditional check error.")
+            # Mark as skipped in state? The condition_func might do this already.
+            # state.mark_phase_executed(phase_marker, status="Skipped") # If state supports status for phases
 
     print("\n[i] Advanced WordPress analysis phase finished.")
-    # Final save of state is typically handled by the main loop after the module finishes.
-    state.mark_phase_executed("wp_analyzer_full") # Mark the entire module as completed
+    state.mark_phase_executed("wp_analyzer_full")

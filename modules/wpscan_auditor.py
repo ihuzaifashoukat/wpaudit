@@ -53,7 +53,7 @@ def run_scan(state, config, target_urls=None): # Added target_urls
         command = [
             "wpscan", "--url", current_target_url,
             "--format", "json", "--output", wpscan_json_output,
-            "--user-agent", config.get("default_user_agent", "OmegaScytheDominator"), # Use .get
+            "--user-agent", config.get("default_user_agent", "WPAUDIT"), # Use .get
         ] # Corrected: Removed extra bracket
         if api_token:
             command.extend(["--api-token", api_token])

@@ -56,75 +56,156 @@ def analyze_comment_security(state, config, target_url):
     findings_key = "comment_security"
     findings = state.get_specific_finding(module_key, findings_key, {
         "status": "Running",
-        "details": "Analyzing comment form security.",
-        "comments_enabled_on_checked_page": None, # True/False/None
+        "details": "Analyzing comment security aspects.",
+        "comments_enabled_on_checked_page": None,
         "checked_page_url": None,
-        "spam_protection_hints": [], # e.g., ["Akismet detected", "Captcha detected"]
-        "potential_vulnerabilities": [] # e.g., Unfiltered HTML in comments (checked by XSS module ideally)
+        "spam_protection_hints": [],
+        "comment_author_link_rel_attributes": {"nofollow_found": False, "ugc_found": False, "other_rel_values": []},
+        "moderation_hint": None, # e.g., "Awaiting moderation message found"
+        "wp_comments_post_php_status": {"accessible": None, "http_auth": False, "status_code": None},
+        "potential_vulnerabilities": [] # For future active checks like unfiltered HTML
     })
+    print("    [i] Analyzing Comment Security...")
 
-    page_url, page_html = find_post_with_comments(state, config, target_url)
+    page_url_with_form, page_html_with_form = find_post_with_comments(state, config, target_url)
 
-    if not page_html:
+    if not page_html_with_form:
         findings["status"] = "Completed"
         findings["details"] = "Could not find a page with a comment form to analyze."
         state.update_specific_finding(module_key, findings_key, findings)
         print("    [-] Comment security analysis skipped: No comment form found.")
         return
 
-    findings["checked_page_url"] = page_url
-    findings["comments_enabled_on_checked_page"] = True # Form was found
+    findings["checked_page_url"] = page_url_with_form
+    findings["comments_enabled_on_checked_page"] = True
 
     try:
-        soup = BeautifulSoup(page_html, 'lxml')
+        soup = BeautifulSoup(page_html_with_form, 'lxml')
         comment_form = soup.find('form', id='commentform') or soup.find('form', action=re.compile(r'wp-comments-post\.php$'))
 
         if not comment_form:
-             # This case should ideally be caught by find_post_with_comments, but double-check
-             findings["comments_enabled_on_checked_page"] = False
-             findings["details"] = "Comment form identified initially, but could not be parsed."
-             print("      [-] Error parsing comment form.")
+            findings["comments_enabled_on_checked_page"] = False # Should have been caught by find_post_with_comments
+            findings["details"] = "Comment form initially indicated, but could not be parsed from fetched HTML."
+            print("      [-] Error: Comment form tag not found in fetched HTML despite initial indication.")
         else:
-            print("      Analyzing comment form HTML...")
-            form_html = str(comment_form).lower()
+            print("      Analyzing comment form and page HTML...")
+            form_html_lower = str(comment_form).lower() # For form specific checks
+            page_html_lower = page_html_with_form.lower() # For page-wide checks like moderation messages
 
-            # Check for common spam protection hints
+            # Spam Protection Hints
             spam_hints = []
-            # Akismet (often adds specific hidden fields or classes)
-            if 'name="ak_js"' in form_html or 'id="akismet_comment_form"' in form_html or 'class="akismet_hidden_field"' in form_html:
+            if 'name="ak_js"' in form_html_lower or 'id="akismet_comment_form"' in form_html_lower or 'class="akismet_hidden_field"' in form_html_lower:
                 spam_hints.append("Akismet")
-                print("        [+] Akismet hint detected.")
-            # Basic CAPTCHA (look for common input names or image tags)
-            if 'name="captcha_code"' in form_html or 'id="captcha_image"' in form_html or 'class="g-recaptcha"' in form_html or 'class="cf-turnstile"' in form_html:
-                 spam_hints.append("CAPTCHA/Turnstile")
-                 print("        [+] CAPTCHA/Turnstile hint detected.")
-            # Honeypot fields (look for hidden fields designed to trap bots)
-            if re.search(r'input\s+[^>]*type=["\']hidden["\'][^>]*name=["\'][^"\']*(?:honeypot|hp|bot)[^"\']*["\']', form_html):
-                 spam_hints.append("Honeypot")
-                 print("        [+] Honeypot field hint detected.")
+            if 'name="captcha_code"' in form_html_lower or 'id="captcha_image"' in form_html_lower or \
+               'class="g-recaptcha"' in form_html_lower or 'class="cf-turnstile"' in form_html_lower or \
+               'hcaptcha' in form_html_lower:
+                spam_hints.append("CAPTCHA/Challenge")
+            if re.search(r'input\s+[^>]*type=["\']hidden["\'][^>]*name=["\'][^"\']*(?:honeypot|hp|bot)[^"\']*["\']', form_html_lower):
+                spam_hints.append("Honeypot")
+            findings["spam_protection_hints"] = list(set(spam_hints))
+            if spam_hints: print(f"        [+] Spam protection hints: {', '.join(spam_hints)}")
+            else: print("        [i] No obvious spam protection hints in form HTML.")
 
-            findings["spam_protection_hints"] = list(set(spam_hints)) # Unique hints
+            # Comment Author Link `rel` attributes (from existing comments on the page)
+            # Look for typical comment list structures
+            comment_list = soup.find('ol', class_=re.compile(r'commentlist|comment-list')) or \
+                           soup.find('ul', class_=re.compile(r'commentlist|comment-list'))
+            if comment_list:
+                author_links = comment_list.find_all('a', class_=re.compile(r'comment-author-link|url'), rel=True)
+                if not author_links: # Fallback if specific classes not found, check any link within comment metadata
+                    author_links = comment_list.find_all('a', rel=True) # Broader check
 
-            # Note: Checking for unfiltered HTML submission is complex and better handled by XSS tests.
-            # We can add an informational note if no obvious spam protection is found.
-            if not spam_hints:
-                 findings["details"] = "Comment form found, but no obvious spam protection (Akismet, CAPTCHA, Honeypot) detected in the form HTML. Manual verification recommended."
-                 print("      [?] No obvious spam protection hints found in comment form.")
-                 state.add_remediation_suggestion("comment_spam_protection", {
-                     "source": "WP Analyzer",
-                     "description": "No common spam protection mechanisms (like Akismet, CAPTCHA, or honeypots) were detected in the comment form HTML.",
-                     "severity": "Low",
-                     "remediation": "Ensure adequate comment spam protection is configured (e.g., using Akismet or a CAPTCHA plugin) to prevent spam and potential abuse."
-                 })
+                rels_found = set()
+                for link in author_links:
+                    rel_values = link.get('rel', [])
+                    for r_val in rel_values: rels_found.add(r_val.lower())
+                
+                if 'nofollow' in rels_found: findings["comment_author_link_rel_attributes"]["nofollow_found"] = True
+                if 'ugc' in rels_found: findings["comment_author_link_rel_attributes"]["ugc_found"] = True
+                findings["comment_author_link_rel_attributes"]["other_rel_values"] = [r for r in rels_found if r not in ['nofollow', 'ugc']]
+                print(f"        [i] Comment author link rel attributes found: nofollow={findings['comment_author_link_rel_attributes']['nofollow_found']}, ugc={findings['comment_author_link_rel_attributes']['ugc_found']}, other={findings['comment_author_link_rel_attributes']['other_rel_values']}")
             else:
-                 findings["details"] = f"Comment form found on {page_url}. Detected hints of: {', '.join(findings['spam_protection_hints'])}."
+                print("        [i] Could not find a typical comment list to check author link rel attributes.")
 
-    except Exception as e:
+
+            # Moderation Hint
+            moderation_keywords = ["comment is awaiting moderation", "your comment will be visible after approval"]
+            if any(kw in page_html_lower for kw in moderation_keywords):
+                findings["moderation_hint"] = "Awaiting moderation message found."
+                print("        [+] 'Awaiting moderation' message hint found on page.")
+            else:
+                findings["moderation_hint"] = "No explicit 'awaiting moderation' message found."
+                print("        [i] No explicit 'awaiting moderation' message found on page.")
+
+
+        # Check wp-comments-post.php accessibility and protection
+        wp_comments_post_url = urljoin(target_url, "wp-comments-post.php")
+        print(f"      Checking accessibility of {wp_comments_post_url}...")
+        try:
+            # Try a GET request first; usually expects POST but can reveal protection
+            response_wcp = make_request(wp_comments_post_url, config, method="GET", allow_redirects=False, timeout=5)
+            if response_wcp:
+                findings["wp_comments_post_php_status"]["status_code"] = response_wcp.status_code
+                if response_wcp.status_code == 401:
+                    findings["wp_comments_post_php_status"]["http_auth"] = True
+                    findings["wp_comments_post_php_status"]["accessible"] = True # Path exists but protected
+                    print(f"        [+] HTTP Authentication detected on {wp_comments_post_url}.")
+                elif response_wcp.status_code == 405: # Method Not Allowed (common for GET to this endpoint)
+                    findings["wp_comments_post_php_status"]["accessible"] = True # Endpoint exists
+                    print(f"        [i] {wp_comments_post_url} returned 405 Method Not Allowed (expected for GET).")
+                elif 200 <= response_wcp.status_code < 400: # Should not be 200 for GET usually
+                    findings["wp_comments_post_php_status"]["accessible"] = True
+                    print(f"        [?] {wp_comments_post_url} returned {response_wcp.status_code} for GET request.")
+                else:
+                    findings["wp_comments_post_php_status"]["accessible"] = False
+                    print(f"        [-] {wp_comments_post_url} not accessible or blocked (Status: {response_wcp.status_code}).")
+            else:
+                findings["wp_comments_post_php_status"]["accessible"] = "Error (No Response)"
+                print(f"        [-] Request to {wp_comments_post_url} failed.")
+        except Exception as e_wcp:
+            print(f"        [-] Error checking {wp_comments_post_url}: {e_wcp}")
+            findings["wp_comments_post_php_status"]["accessible"] = f"Error ({type(e_wcp).__name__})"
+
+
+    except Exception as e_main:
         findings["status"] = "Error"
-        findings["details"] = f"Error during comment form HTML parsing: {e}"
-        print(f"      [-] Error parsing comment form: {e}")
+        findings["details"] = f"Error during comment security analysis: {e_main}"
+        print(f"      [-] Main error in comment security analysis: {e_main}")
+
+    # Consolidate details for reporting
+    summary_parts = []
+    if findings["comments_enabled_on_checked_page"]:
+        summary_parts.append(f"Comments appear enabled on {findings['checked_page_url']}.")
+        if findings["spam_protection_hints"]:
+            summary_parts.append(f"Spam protection hints: {', '.join(findings['spam_protection_hints'])}.")
+        else:
+            summary_parts.append("No obvious spam protection hints found in form.")
+            state.add_remediation_suggestion("comment_spam_protection_v2", {
+                "source": "WP Analyzer (Comment Security)",
+                "description": "No common spam protection mechanisms (like Akismet, CAPTCHA, or honeypots) were detected in the comment form HTML.",
+                "severity": "Low",
+                "remediation": "Ensure adequate comment spam protection is configured (e.g., using Akismet or a CAPTCHA plugin) to prevent spam and potential abuse."
+            })
+        if findings["moderation_hint"] == "Awaiting moderation message found.":
+            summary_parts.append("Comments likely require moderation.")
+        
+        rel_attr = findings["comment_author_link_rel_attributes"]
+        if not rel_attr["nofollow_found"] or not rel_attr["ugc_found"]:
+            summary_parts.append("Comment author links may be missing 'nofollow' or 'ugc' attributes.")
+            state.add_remediation_suggestion("comment_author_link_rel", {
+                "source": "WP Analyzer (Comment Security)",
+                "description": "Comment author links might be missing 'rel=\"nofollow\"' or 'rel=\"ugc\"' attributes, which is a best practice for SEO and indicating user-generated content.",
+                "severity": "Info",
+                "remediation": "Ensure WordPress or your theme correctly adds 'rel=\"nofollow ugc\"' (or at least 'nofollow') to comment author links."
+            })
+
+    if findings["wp_comments_post_php_status"]["http_auth"]:
+        summary_parts.append("wp-comments-post.php is protected by HTTP Authentication.")
+    elif findings["wp_comments_post_php_status"]["accessible"] is False:
+         summary_parts.append(f"wp-comments-post.php was not accessible or blocked (Status: {findings['wp_comments_post_php_status']['status_code']}).")
 
 
+    findings["details"] = " ".join(summary_parts) if summary_parts else "Comment security checks performed. See specific findings."
     findings["status"] = "Completed"
     state.update_specific_finding(module_key, findings_key, findings)
     print(f"    [+] Comment security analysis finished. Details: {findings['details']}")

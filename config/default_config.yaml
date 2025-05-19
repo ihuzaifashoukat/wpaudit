@@ -1,4 +1,4 @@
-# Default Configuration for OmegaScythe Overlord
+# Default Configuration for WPAUDIT
 
 # --- Tool Paths ---
 tool_paths:
@@ -20,11 +20,11 @@ api_keys:
   # virustotal: null # If checking domain reputation
 
 # --- Output Settings ---
-output_dir: "omegascythe_overlord_reports"
-report_prefix: "oso_report"
+output_dir: "wpaudit_reports"
+report_prefix: "wpaudit_report"
 
 # --- General Settings ---
-default_user_agent: "OmegaScytheOverlord/2.0 (Ethical Audit; +http://example.com/botinfo)"
+default_user_agent: "WPAUDIT/2.0 (Ethical Audit; +http://example.com/botinfo)"
 interactive_prompts: true
 respect_robots_txt: false
 enable_waf_detection: true
@@ -69,8 +69,18 @@ arjun_options: "-t 10 -m GET" # Default 10 threads, check GET params. Add -m POS
 analyzer_check_wp_debug: true # Check for WP_DEBUG error exposure
 
 # --- SQLMap Specific Config ---
-sqlmap_options_default: "--batch --level=3 --risk=2 --user-agent='{DEFAULT_USER_AGENT}' --random-agent --tamper=space2comment --threads=5" # Example default options
-sqlmap_options_aggressive: "--batch --level=5 --risk=3 --user-agent='{DEFAULT_USER_AGENT}' --random-agent --tamper=space2comment,between --threads=10 --dbms=mysql --os=linux --technique=BEUSTQ" # Example aggressive options
+sqlmap_options_default: "--batch --level=3 --risk=2 --user-agent='{DEFAULT_USER_AGENT}' --random-agent --threads=5" # Example default options, removed tamper from here
+sqlmap_options_aggressive: "--batch --level=5 --risk=3 --user-agent='{DEFAULT_USER_AGENT}' --random-agent --threads=10 --dbms=mysql --os=linux --technique=BEUSTQ" # Example aggressive options
+sqlmap_options_stealthy: "--batch --level=1 --risk=1 --user-agent='{DEFAULT_USER_AGENT}' --random-agent --threads=3 --delay=1" # Added for consistency
+sqlmap_options_moderate: "--batch --level=3 --risk=2 --user-agent='{DEFAULT_USER_AGENT}' --random-agent --threads=5" # Added for consistency
+
+# SQLMap Tamper Scripts (comma-separated string, e.g., "space2comment,randomcase")
+# List of available tampers: sqlmap --list-tampers
+sqlmap_tamper_scripts_default: "space2comment,randomcase" # A sensible default
+sqlmap_tamper_scripts_stealthy: "apostrophemask,randomcase"
+sqlmap_tamper_scripts_moderate: "space2comment,randomcase,apostrophenullencode,equaltolike"
+sqlmap_tamper_scripts_aggressive: "space2comment,randomcase,between,chardoubleencode,charencode,charunicodeencode,equaltolike,greatest,multiplespaces,percentage,unionalltounion,versionedkeywords" # More aggressive set
+
 sqlmap_enable_dumping: false # DANGER: Set to true to attempt dumping data if vulnerable
 sqlmap_dump_options: "--dump --exclude-sysdbs" # Example: Dump all user tables, exclude system DBs. Customize as needed.
 
@@ -97,21 +107,27 @@ arjun_timeout: 1800 # Added (30 minutes)
 # --- Scan Profiles (Example: aggressive profile gets more fuzzing options) ---
 scan_profiles:
   default:
-    
     wpscan_options: "--enumerate vp,vt,tt,cb,dbe,u1-10 --plugins-detection mixed --themes-detection mixed --interesting-findings-detection mixed"
     nuclei_templates: "technologies/wordpress,cves,default-logins,exposed-panels,exposures,file,misconfiguration,network,sqli,ssti,takeovers,vulnerabilities,xss"
+    nmap_options: "-sV -T4 -Pn" # Added -Pn to skip host discovery if target is assumed up
+    nmap_ports: "T:21-25,53,80,110,111,135,139,143,443,445,993,995,1723,3306,3389,5900,8080,8443" # Common TCP ports
+    nmap_scripts: "default,banner" # Run default scripts and banner grabbing
     enable_ajax_fuzzing: false # Default to false for safety
     enable_rest_fuzzing: false # Default to false
   stealth:
-    
     wpscan_options: "--enumerate p,t --plugins-detection passive --themes-detection passive --random-user-agent"
     nuclei_templates: "technologies/wordpress/wordpress-detect.yaml,technologies/wordpress/wordpress-version.yaml,exposures/files/wp-config-backup.yaml"
+    nmap_options: "-sS -T2 -Pn" # TCP SYN scan, Timing template 2, No Ping
+    nmap_ports: "T:80,443" # Only web ports
+    nmap_scripts: "http-title,http-headers" # Basic HTTP info scripts
     enable_ajax_fuzzing: false
     enable_rest_fuzzing: false
   aggressive:
-    
     wpscan_options: "--enumerate ap,at,u,m,tt,cb,dbe --detection-mode aggressive --plugins-version-detection aggressive --themes-version-detection aggressive --password-attack xmlrpc,wp-login --wordlist {WORDLIST_PATH} --force --api-detection aggressive --plugins-list /path/to/your/custom_plugin_list.txt" # Example custom list
     nuclei_templates: "default-logins,cves,misconfiguration,network,rce,sqli,ssti,vulnerabilities,wordpress,xss,exposed-panels,exposures,takeovers,file,fuzzing,headless,iot,cloud,database,dns,ftp,git,java,javascript,ldap,memcached,mongodb,mssql,mysql,oracle,postgresql,rdp,redis,rsync,ruby,smb,smtp,snmp,ssh,telnet,tomcat,websocket,xml,technologies"
+    nmap_options: "-sV -A -T4 -Pn" # Service Version, OS detection, Aggressive timing, No Ping
+    nmap_ports: "T:1-65535" # All TCP ports
+    nmap_scripts: "vuln,exploit,auth,discovery,intrusive" # Aggressive script categories
     enable_ajax_fuzzing: true # Enable for aggressive profile
     enable_rest_fuzzing: true # Enable for aggressive profile
     # Add specific fuzzing payloads or options here if desired
@@ -120,7 +136,7 @@ scan_profiles:
 # --- Fuzzing Payloads (Can be extended significantly) ---
 fuzzing_payloads:
   sqli_basic: ["'", "\"", " OR 1=1 --", " OR '1'='1", " AND 1=1", "SLEEP(5)"]
-  xss_basic: ["<script>alert('OS_XSS')</script>", "<img src=x onerror=alert('OS_XSS')>", "\"'><svg/onload=alert`1`>"]
+  xss_basic: ["<script>alert('WPAUDIT_XSS')</script>", "<img src=x onerror=alert('WPAUDIT_XSS')>", "\"'><svg/onload=alert`1`>"]
   lfi_basic: ["../../etc/passwd", "../../../../etc/passwd", "C:\\boot.ini"]
   ssti_basic: ["{{7*7}}", "${7*7}", "#{7*7}"]
   cmd_injection_basic: [";id", "|id", "&&id"]

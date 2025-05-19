@@ -10,7 +10,7 @@ def print_dominator_banner():
 | | | | |\/| |  _|   | | | | __) | | | \___ \| |_  | |\/| || |\___ \| |_| |  _| |  \| | |  _
 | |_| | |  | | |___  | |_| |/ __/| |_| |___) |  _| | |  | || | ___) |  _  | |___| |\  | |_| |
  \___/|_|  |_|_____|  \___/_____(_)___/|____/|_|   |_|  |_|___|____/|_| |_|_____|_| \_|\____|
-                      Dominator - Hyper-Configurable WordPress Security Auditing Suite
+                      WPAUDIT - Hyper-Configurable WordPress Security Auditing Suite
     """)
     print("=" * 110)
     print("!! EXTREME WARNING: FOR ETHICAL, EDUCATIONAL, AND AUTHORIZED USE ONLY !!")
@@ -22,7 +22,7 @@ def print_dominator_banner():
 
 def create_output_directory(config: dict):
     """Creates the output directory specified in the config."""
-    output_dir = config.get('output_dir', 'omegascythe_dominator_reports')
+    output_dir = config.get('output_dir', 'wpaudit_reports')
     if not os.path.exists(output_dir):
         try:
             os.makedirs(output_dir)
@@ -44,8 +44,8 @@ def sanitize_filename(filename_part: str, max_length=100):
 
 def get_scan_filename_prefix(state, config: dict):
     """Generates the base filename prefix for reports and logs for the current scan."""
-    output_dir = config.get('output_dir', 'omegascythe_dominator_reports')
-    report_prefix = config.get('report_prefix', 'osd_report')
+    output_dir = config.get('output_dir', 'wpaudit_reports')
+    report_prefix = config.get('report_prefix', 'wpaudit_report')
     # Get hostname from state if available, otherwise use a placeholder
     target_info = state.get_full_state().get("scan_metadata", {}).get("target_info", {})
     hostname_part = target_info.get("sanitized_hostname")
