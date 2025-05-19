@@ -1,0 +1,126 @@
+# Default Configuration for OmegaScythe Overlord
+
+# --- Tool Paths ---
+tool_paths:
+  nmap: nmap
+  wpscan: wpscan
+  nuclei: nuclei
+  sqlmap: sqlmap
+  searchsploit: searchsploit
+  msfconsole: msfconsole
+  wafw00f: wafw00f
+  subfinder: subfinder
+  ffuf: ffuf # Added
+  arjun: arjun # Added
+
+# --- API Keys ---
+api_keys:
+  wpscan: null
+  # shodan: null # Example if Shodan used for passive subdomain/IP info
+  # virustotal: null # If checking domain reputation
+
+# --- Output Settings ---
+output_dir: "omegascythe_overlord_reports"
+report_prefix: "oso_report"
+
+# --- General Settings ---
+default_user_agent: "OmegaScytheOverlord/2.0 (Ethical Audit; +http://example.com/botinfo)"
+interactive_prompts: true
+respect_robots_txt: false
+enable_waf_detection: true
+wordlist_path: "/usr/share/wordlists/rockyou.txt" # Adjust as needed
+requests_timeout: 15
+max_param_fuzz_urls: 3 # For conceptual param fuzzing in wp_analyzer
+js_analysis_max_files: 5 # Conceptual limit for JS analysis
+js_analysis_max_size_kb: 1024 # Max JS file size in KB
+
+# --- OAST Configuration (User needs to set this up externally) ---
+oast_domain_placeholder: "YOUR_OAST_DOMAIN_HERE" # e.g., xyz.burpcollaborator.net or unique_id.interact.sh
+enable_oast_payload_generation: false # Generate payloads for manual OAST monitoring
+
+# --- Subdomain Scanner Config ---
+enable_subdomain_scan: true
+subfinder_options: "-silent -t 50" # Subfinder specific options
+enable_subdomain_takeover_check: true
+takeover_check_cname_patterns: # Common patterns for takeover checks
+  - "s3.amazonaws.com"
+  - "cloudfront.net"
+  - "herokudns.com"
+  - "herokuapp.com"
+  - "github.io"
+  - "sites.readme.io"
+  - "wordpress.com"
+  - "pantheonsite.io"
+  # Add more as needed
+subdomain_validation_timeout: 5 # Timeout in seconds for HEAD requests during subdomain protocol validation
+
+# --- Directory Bruteforcer Config (ffuf) ---
+enable_directory_bruteforce: true
+directory_bruteforce_wordlist: "/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt" # Adjust path as needed
+ffuf_options: "-mc 200,204,301,302,307,401,403 -fc 404 -fr '/^$/' -t 50" # Default options, match common codes, filter 404s and empty responses, 50 threads
+ffuf_recursion_depth: 0 # Set > 0 to enable recursion
+ffuf_extensions: [".php", ".html", ".txt", ".bak", ".old", ".zip", ".tar.gz"] # Common extensions to append
+
+# --- Parameter Finder Config (Arjun) ---
+enable_parameter_finding: true
+arjun_options: "-t 10 -m GET" # Default 10 threads, check GET params. Add -m POST for POST params.
+
+# --- WP Analyzer Specific Config ---
+analyzer_check_wp_debug: true # Check for WP_DEBUG error exposure
+
+# --- SQLMap Specific Config ---
+sqlmap_options_default: "--batch --level=3 --risk=2 --user-agent='{DEFAULT_USER_AGENT}' --random-agent --tamper=space2comment --threads=5" # Example default options
+sqlmap_options_aggressive: "--batch --level=5 --risk=3 --user-agent='{DEFAULT_USER_AGENT}' --random-agent --tamper=space2comment,between --threads=10 --dbms=mysql --os=linux --technique=BEUSTQ" # Example aggressive options
+sqlmap_enable_dumping: false # DANGER: Set to true to attempt dumping data if vulnerable
+sqlmap_dump_options: "--dump --exclude-sysdbs" # Example: Dump all user tables, exclude system DBs. Customize as needed.
+
+# --- Exploit Intelligence Config ---
+exploit_intel_enable_autorun: false # DANGER: Set to true to attempt running *allowed* Metasploit modules
+exploit_intel_autorun_modules: # List of specific MSF modules allowed to autorun (use with extreme caution!)
+  - "exploit/unix/webapp/wp_admin_shell_upload" # Example: A common WP exploit
+  # - "auxiliary/scanner/http/wp_*" # Example pattern (requires logic change to handle patterns)
+exploit_intel_autorun_lhost: "127.0.0.1" # Default LHOST for reverse shells (user should override if needed)
+exploit_intel_autorun_lport_start: 4444 # Starting LPORT for reverse shells
+
+# --- Tool Timeouts (in seconds) ---
+nmap_timeout: 1200
+wpscan_timeout: 3600
+nuclei_timeout: 7200
+sqlmap_timeout_per_target: 7200
+searchsploit_timeout: 30
+msfconsole_timeout: 90
+wafw00f_timeout: 300
+subfinder_timeout: 600
+ffuf_timeout: 1800 # Added (30 minutes)
+arjun_timeout: 1800 # Added (30 minutes)
+
+# --- Scan Profiles (Example: aggressive profile gets more fuzzing options) ---
+scan_profiles:
+  default:
+    
+    wpscan_options: "--enumerate vp,vt,tt,cb,dbe,u1-10 --plugins-detection mixed --themes-detection mixed --interesting-findings-detection mixed"
+    nuclei_templates: "technologies/wordpress,cves,default-logins,exposed-panels,exposures,file,misconfiguration,network,sqli,ssti,takeovers,vulnerabilities,xss"
+    enable_ajax_fuzzing: false # Default to false for safety
+    enable_rest_fuzzing: false # Default to false
+  stealth:
+    
+    wpscan_options: "--enumerate p,t --plugins-detection passive --themes-detection passive --random-user-agent"
+    nuclei_templates: "technologies/wordpress/wordpress-detect.yaml,technologies/wordpress/wordpress-version.yaml,exposures/files/wp-config-backup.yaml"
+    enable_ajax_fuzzing: false
+    enable_rest_fuzzing: false
+  aggressive:
+    
+    wpscan_options: "--enumerate ap,at,u,m,tt,cb,dbe --detection-mode aggressive --plugins-version-detection aggressive --themes-version-detection aggressive --password-attack xmlrpc,wp-login --wordlist {WORDLIST_PATH} --force --api-detection aggressive --plugins-list /path/to/your/custom_plugin_list.txt" # Example custom list
+    nuclei_templates: "default-logins,cves,misconfiguration,network,rce,sqli,ssti,vulnerabilities,wordpress,xss,exposed-panels,exposures,takeovers,file,fuzzing,headless,iot,cloud,database,dns,ftp,git,java,javascript,ldap,memcached,mongodb,mssql,mysql,oracle,postgresql,rdp,redis,rsync,ruby,smb,smtp,snmp,ssh,telnet,tomcat,websocket,xml,technologies"
+    enable_ajax_fuzzing: true # Enable for aggressive profile
+    enable_rest_fuzzing: true # Enable for aggressive profile
+    # Add specific fuzzing payloads or options here if desired
+    # ajax_fuzz_payloads: ["'", "\"", "<svg/onload=alert(1)>", "AND 1=1", "OR 1=1"]
+
+# --- Fuzzing Payloads (Can be extended significantly) ---
+fuzzing_payloads:
+  sqli_basic: ["'", "\"", " OR 1=1 --", " OR '1'='1", " AND 1=1", "SLEEP(5)"]
+  xss_basic: ["<script>alert('OS_XSS')</script>", "<img src=x onerror=alert('OS_XSS')>", "\"'><svg/onload=alert`1`>"]
+  lfi_basic: ["../../etc/passwd", "../../../../etc/passwd", "C:\\boot.ini"]
+  ssti_basic: ["{{7*7}}", "${7*7}", "#{7*7}"]
+  cmd_injection_basic: [";id", "|id", "&&id"]

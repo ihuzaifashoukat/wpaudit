@@ -1,0 +1,5 @@
+PyYAML>=5.1
+requests>=2.25.0
+dnspython>=2.0.0 # For DNS lookups in takeover checks
+beautifulsoup4>=4.9.0 # For HTML parsing
+lxml>=4.6.0 # Efficient parser for BeautifulSoup
