@@ -3,3 +3,6 @@ requests>=2.25.0
 dnspython>=2.0.0 # For DNS lookups in takeover checks
 beautifulsoup4>=4.9.0 # For HTML parsing
 lxml>=4.6.0 # Efficient parser for BeautifulSoup
+Jinja2>=3.0.0 # For HTML reporting
+orjson>=3.5.0 # For faster JSON processing
+packaging>=21.0 # For version parsing
