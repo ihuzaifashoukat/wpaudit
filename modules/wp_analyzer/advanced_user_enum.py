@@ -1,6 +1,6 @@
 # Module for Advanced WordPress User Enumeration Techniques
 import requests # Retained for context
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 from .utils import make_request
 import re
 import json

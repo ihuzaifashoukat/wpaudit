@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import dns.resolver # Requires dnspython
 from core.tool_runner import run_command
 from core.utils import get_scan_filename_prefix, sanitize_filename

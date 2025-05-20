@@ -1,4 +1,5 @@
 # Module for WordPress Authentication Hardening Checks
+from urllib.parse import urljoin
 import requests # Retained for context
 import re # Added import for re module
 from .utils import make_request
