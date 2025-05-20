@@ -13,7 +13,7 @@ from .file_exposure import check_sensitive_file_exposure
 from .login_page import analyze_login_page
 from .directory_listing import check_directory_listing
 from .debug_exposure import check_wp_debug_exposure
-from .rest_api import analyze_rest_api_user_enum
+from .rest_api import analyze_rest_api_general
 from .ajax_checker import analyze_ajax_actions # Import the new AJAX checker
 from .extension_scanner import analyze_extensions # Import the new extension scanner
 from .core_vuln_checker import analyze_core_version # Import the new core vuln checker
@@ -125,7 +125,7 @@ def run_analysis(state, config):
         ("Login Page", analyze_login_page, "analyzer_login_page", None),
         ("Directory Listing", check_directory_listing, "analyzer_dir_listing", None),
         ("WP_DEBUG Exposure", check_wp_debug_exposure, "analyzer_wp_debug", None),
-        ("REST API User Enumeration", analyze_rest_api_user_enum, "analyzer_rest_user_enum", None), # Runs first to inform others
+        ("REST API General Analysis", analyze_rest_api_general, "analyzer_rest_api_general", None), # Changed from user_enum
         ("AJAX Action Analysis", analyze_ajax_actions, "analyzer_ajax_actions", None),
         ("Theme/Plugin Vulnerabilities", analyze_extensions, "analyzer_extensions", None),
         ("Core Version & Vulnerabilities", analyze_core_version, "analyzer_core_vuln", None),

@@ -85,22 +85,87 @@ WPAUDIT seamlessly integrates with a suite of industry-standard security tools. 
 
 ## Installation Guide for WPAUDIT
 
+Follow these steps to get WPAUDIT up and running on your system.
+
+### General Setup
+
 1.  **Clone the repository:**
     ```bash
     git clone https://github.com/ihuzaifashoukat/wpaudit
     cd wpaudit # Or your project directory name
     ```
-2.  **Install Python dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-3.  **Install External Tools:** Follow the installation instructions for Nmap, WPScan, Nuclei, and SQLMap for your operating system.
+2.  **Install Python dependencies (Recommended: Use a Virtual Environment):**
+    It's highly recommended to use a Python virtual environment to manage dependencies and avoid conflicts with system-wide packages.
+    *   Create a virtual environment:
+        ```bash
+        python3 -m venv venv 
+        ```
+        (Replace `venv` with your preferred environment name if desired)
+    *   Activate the virtual environment:
+        *   On Linux/macOS:
+            ```bash
+            source venv/bin/activate
+            ```
+        *   On Windows:
+            ```bash
+            .\venv\Scripts\activate
+            ```
+    *   Install dependencies:
+        ```bash
+        pip install -r requirements.txt
+        ```
+3.  **Install External Tools:** WPAUDIT relies on several external security tools. Ensure they are installed and accessible in your system's PATH, or their paths are correctly specified in your `config.yaml`. Refer to the "External Tools Integration" section for a list of tools. Installation methods vary by OS and tool.
+
 4.  **Configure:**
     *   Copy or rename `config/default_config.yaml` to `config/config.yaml` (or use a custom path).
     *   Edit the configuration file (`config.yaml`) to:
         *   Set the correct paths for the external tools if they are not in your system's PATH.
         *   Add your WPScan API token under `api_keys`.
         *   Adjust profile settings and other parameters as needed.
+
+### Kali Linux Specific Setup
+
+Kali Linux has specific considerations for Python package management and comes with many security tools pre-installed or easily available.
+
+1.  **Clone the repository (if not already done):**
+    ```bash
+    git clone https://github.com/ihuzaifashoukat/wpaudit
+    cd wpaudit
+    ```
+
+2.  **Set up Python Virtual Environment (Highly Recommended on Kali):**
+    Kali Linux uses an "externally managed" Python environment. To avoid issues, always use a virtual environment for Python projects.
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
+    Your terminal prompt should change to indicate the virtual environment is active (e.g., `(venv) user@kali:~/wpaudit$`).
+
+3.  **Install Python Dependencies:**
+    With the virtual environment activated:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4.  **Install/Verify External Tools on Kali Linux:**
+    Many tools are available via `apt`. You can try to install them using:
+    ```bash
+    sudo apt update
+    sudo apt install -y nmap wpscan nuclei sqlmap exploitdb metasploit-framework subfinder ffuf arjun
+    ```
+    **Notes on Kali Tool Installation:**
+    *   `wpscan`: The command `apt install wpscan` should work on most up-to-date Kali systems. If it doesn't, or if you need a newer version than what `apt` provides, you can install/update it using RubyGems:
+        ```bash
+        sudo apt install -y ruby ruby-dev build-essential
+        sudo gem install wpscan
+        ```
+    *   `searchsploit`: This tool is part of the `exploitdb` package. The command `sudo apt install -y exploitdb` should install it. If you encounter issues or want the very latest version, you can clone it directly: `git clone https://gitlab.com/exploit-database/exploitdb.git /opt/exploitdb` (and then add `/opt/exploitdb` to your PATH or symlink `searchsploit`).
+    *   `nuclei`, `subfinder`, `ffuf`, `arjun`: These are often Go-based tools. If not available via `apt` or if you need the latest versions, you might need to download their precompiled binaries from their official GitHub release pages or install them using `go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest` (requires Go to be installed: `sudo apt install golang-go`).
+    *   Always verify that the tools are correctly installed and accessible in your PATH. WPAUDIT's `tool_paths` in `config.yaml` can be used to specify direct paths if needed.
+    *   `metasploit-framework` is a large package and might take time to install.
+
+5.  **Configure WPAUDIT:**
+    Proceed with the configuration steps mentioned in the "General Setup" (copying `default_config.yaml` to `config.yaml` and editing it).
 
 ## Usage
 

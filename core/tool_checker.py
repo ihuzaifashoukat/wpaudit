@@ -29,9 +29,9 @@ TOOL_VERSION_COMMANDS = {
     "nmap": ["nmap", "--version"],
     "wpscan": ["wpscan", "--version"],
     "nuclei": ["nuclei", "-version"],
-    "sqlmap": ["sqlmap", "--version"], # Or sqlmap-dev if that's the command
-    "searchsploit": ["searchsploit", "-v"], # Or --version
-    "msfconsole": ["msfconsole", "-v"], # Or --version
+    "sqlmap": ["sqlmap", "--version"],
+    "searchsploit": ["searchsploit", "--version"], # Changed from -v
+    "msfconsole": ["msfconsole", "-v"],
     "subfinder": ["subfinder", "-version"],
     "ffuf": ["ffuf", "-V"],
     "arjun": ["arjun", "--version"],
@@ -41,14 +41,14 @@ TOOL_VERSION_COMMANDS = {
 # Regex to extract version string (more specific per tool)
 TOOL_VERSION_REGEX = {
     "nmap": r"Nmap version ([\d.]+)",
-    "wpscan": r"WordPress Security Scanner version ([\d.]+)", # Or just find version number
-    "nuclei": r"Nuclei Engine Version:\s*v([\d.]+)",
-    "sqlmap": r"sqlmap version ([\d.]+)",
-    "searchsploit": r"searchsploit (\d+\.\d+\.\d+)", # Example: searchsploit 4.9.12
-    "msfconsole": r"Framework Version:\s*([\d.]+)", # Example: Framework Version: 6.0.0-dev-
-    "subfinder": r"Subfinder version: v([\d.]+)",
-    "ffuf": r"ffuf version:\s*v([\d.]+)",
-    "arjun": r"Arjun v([\d.]+)"
+    "wpscan": r"(?:\[\+\]\s*)?WordPress Security Scanner version\s+([\d.]+)", # Made more robust
+    "nuclei": r"Nuclei Engine Version:\s*v?([\d.]+)", # Allow optional v
+    "sqlmap": r"^([\d.]+(?:#\w+)?)", # Matches "1.9.4#stable" from start of line
+    "searchsploit": r"SearchSploit version:\s*([\d.]+)", # Adjusted for typical output of --version
+    "msfconsole": r"Framework Version:\s*([\d.]+)",
+    "subfinder": r"Current Version:\s*v([\d.]+)", # Adjusted to match actual output
+    "ffuf": r"ffuf version:\s*v?([\d.]+(?:-dev)?)", # Allow optional v and -dev suffix
+    "arjun": r"Arjun v([\d.]+)" # Arjun's version command itself fails (RC=2), regex is likely fine if command worked.
 }
 
 # Minimum required versions (optional, can be expanded)
