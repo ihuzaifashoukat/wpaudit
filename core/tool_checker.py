@@ -100,26 +100,41 @@ def _check_single_tool(tool_key, config, state):
 
         if process.returncode == 0 or is_present_despite_rc:
             # Tool executed or considered present, try to parse version
-            tool_check_result["status"] = "Found (Version Unknown)" # Default if regex fails
             version_str = "Unknown"
+            parsed_successfully = False
             
             version_regex_pattern = TOOL_VERSION_REGEX.get(tool_key)
             if version_regex_pattern:
                 match = re.search(version_regex_pattern, output_for_regex, re.IGNORECASE)
                 if match:
-                    version_str = match.group(1)
+                    version_str = match.group(1).strip() # Ensure no leading/trailing whitespace
                     tool_check_result["version"] = version_str
-                    tool_check_result["status"] = "Found" # Version successfully parsed
+                    # Status will be updated after min version check
+                    parsed_successfully = True 
                 else: # Regex defined but no match
-                    print(f"      [?] {tool_key}: Version regex did not match output. Output snippet: {output_for_regex[:100].strip()}")
-            else: # No specific regex, try generic
-                generic_match = re.search(r'version\s+v?([\d][\d.a-zA-Z-]+)', output_for_regex, re.IGNORECASE) or \
-                                re.search(r'v([\d][\d.a-zA-Z-]+)', output_for_regex, re.IGNORECASE) or \
-                                re.search(r'([\d][\d.a-zA-Z-]+)', output_for_regex) # Fallback
-                if generic_match:
-                    version_str = generic_match.group(1)
-                    tool_check_result["version"] = version_str
-                    tool_check_result["status"] = "Found"
+                    print(f"      [?] {tool_key}: Specific version regex did not match. Output snippet: {output_for_regex[:100].strip()}")
+            
+            if not parsed_successfully: # No specific regex or it failed, try generic
+                generic_patterns = [
+                    r'version\s+v?([\d][\d.a-zA-Z-]+)', 
+                    r'v([\d][\d.a-zA-Z-]+)', # Common for Go tools
+                    r'([\d]+\.[\d]+\.[\d]+(?:\.[\d]+)?)' # General X.Y.Z or X.Y.Z.A
+                ]
+                for gp in generic_patterns:
+                    generic_match = re.search(gp, output_for_regex, re.IGNORECASE)
+                    if generic_match:
+                        version_str = generic_match.group(1).strip()
+                        tool_check_result["version"] = version_str
+                        parsed_successfully = True
+                        break
+            
+            if parsed_successfully:
+                tool_check_result["status"] = "Found" # Base status if version string is found
+            else:
+                # If is_present_despite_rc was true, it means the tool ran but we couldn't get a version.
+                # If process.returncode was 0, it also means it ran but no version string matched.
+                tool_check_result["status"] = "Found (Version Unknown)"
+                print(f"      [?] {tool_key}: Could not parse version string from output.")
 
             # Compare with minimum version if found and defined
             min_version_str = MIN_TOOL_VERSIONS.get(tool_key)
@@ -137,22 +152,28 @@ def _check_single_tool(tool_key, config, state):
                         print(f"      [!] Found {tool_key} (Version: {version_str} < Required: {min_version_str}) at {actual_command_path}")
                 except InvalidVersion:
                     tool_check_result["version_ok"] = "Parse Error"
-                    print(f"      [?] Could not parse version '{version_str}' or '{min_version_str}' for {tool_key} comparison.")
-            elif version_str != "Unknown": # Version found, but no min_version defined
-                 tool_check_result["version_ok"] = "Not Checked"
-                 print(f"      [+] Found {tool_key} (Version: {version_str}) at {actual_command_path}")
-            else: # Version still unknown
-                 print(f"      [?] Found {tool_key} at {actual_command_path}, but version could not be determined from output.")
-                 tool_check_result["status"] = "Found (Version Unknown)"
+                    print(f"      [?] Could not parse version '{version_str}' (tool) or '{min_version_str}' (min_req) for {tool_key} comparison.")
+            elif version_str != "Unknown": # Version found, but no min_version defined for it
+                 tool_check_result["version_ok"] = "Not Checked" # No minimum to check against
+                 tool_check_result["status"] = "Found (Version OK)" # Assume OK if version found and no min specified
+                 print(f"      [+] Found {tool_key} (Version: {version_str}) at {actual_command_path} (No minimum version specified).")
+            # If version_str is "Unknown", status remains "Found (Version Unknown)" from above.
+            
+            # If the tool was considered present despite RC!=0, but version parsing failed, keep status as "Found (Version Unknown)"
+            # If RC was 0 but parsing failed, it's also "Found (Version Unknown)"
+            # If RC!=0 and is_present_despite_rc is False, this block is not reached.
 
-
-        elif process.returncode != 0 and ("command not found" not in output_for_regex.lower() and "no such file" not in output_for_regex.lower()):
-             tool_check_result["status"] = "Found (Version Cmd Error)" # Tool likely exists, but version cmd failed
-             tool_check_result["version"] = f"Error RC={process.returncode}"
-             print(f"      [!] Found {tool_key} at {actual_command_path}, but version command failed (RC={process.returncode}). Assuming usable if critical.")
-        else: # Command likely not found or other execution error
-             print(f"      [-] {tool_key} not found or version command execution failed. RC={process.returncode}. Output: {output_for_regex[:100].strip()}")
-             tool_check_result["status"] = "Not Found"
+        elif process.returncode != 0 and not is_present_despite_rc: # Genuine failure to execute or not found
+             # Check if it's a "command not found" type of error or other execution error
+             if "command not found" in output_for_regex.lower() or "no such file" in output_for_regex.lower():
+                 tool_check_result["status"] = "Not Found"
+                 print(f"      [-] {tool_key} command not found. Output: {output_for_regex[:100].strip()}")
+             else: # Other execution error, but tool might be there
+                 tool_check_result["status"] = "Error (Execution Failed)"
+                 tool_check_result["version"] = f"Error RC={process.returncode}"
+                 print(f"      [!] {tool_key} command execution failed (RC={process.returncode}). Output: {output_for_regex[:100].strip()}")
+        # If process.returncode != 0 AND is_present_despite_rc is True, it's handled by the block above.
+        # The status will be "Found (Version Unknown)" if parsing fails, or "Found (Version OK/Too Low)" if it succeeds.
 
     except FileNotFoundError:
         print(f"      [-] {tool_key} command '{actual_command_path}' not found in PATH or config.")

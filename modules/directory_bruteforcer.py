@@ -17,9 +17,10 @@ def run_scan(state, config):
         state.save_state()
         return
 
-    if state.get_full_state()["tool_checks"].get("ffuf", {}).get("status") != "Found":
-        print("[!] ffuf tool not found or check failed. Skipping directory/file brute-forcing.")
-        state.update_module_findings("directory_bruteforcer", {"status": "Skipped (ffuf Missing)"})
+    ffuf_check_status = state.get_full_state()["tool_checks"].get("ffuf", {}).get("status", "Not Found")
+    if not (ffuf_check_status.startswith("Found") or ffuf_check_status == "Check Skipped (No Version Cmd)"):
+        print(f"[!] ffuf tool not found or check failed (Status: {ffuf_check_status}). Skipping directory/file brute-forcing.")
+        state.update_module_findings("directory_bruteforcer", {"status": f"Skipped (ffuf Status: {ffuf_check_status})"})
         state.mark_phase_executed("directory_bruteforce")
         state.save_state()
         return

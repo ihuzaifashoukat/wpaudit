@@ -18,9 +18,12 @@ def run_scan(state, config):
         state.save_state()
         return
 
-    if state.get_full_state()["tool_checks"].get("subfinder", {}).get("status") != "Found":
-        print("[!] Subfinder tool not found or check failed. Skipping subdomain scan.")
-        state.update_module_findings("subdomain_scanner", {"status": "Skipped (Subfinder Missing)"})
+    subfinder_check_status = state.get_full_state()["tool_checks"].get("subfinder", {}).get("status", "Not Found")
+    # Allow if status starts with "Found" (e.g., "Found (Version OK)", "Found (Version Unknown)", "Found (Version Cmd Error)")
+    # or if it was "Check Skipped (No Version Cmd)" which implies we assume it's there if configured.
+    if not (subfinder_check_status.startswith("Found") or subfinder_check_status == "Check Skipped (No Version Cmd)"):
+        print(f"[!] Subfinder tool not found or check failed (Status: {subfinder_check_status}). Skipping subdomain scan.")
+        state.update_module_findings("subdomain_scanner", {"status": f"Skipped (Subfinder Status: {subfinder_check_status})"})
         state.mark_phase_executed("subdomain_scan")
         state.save_state()
         return

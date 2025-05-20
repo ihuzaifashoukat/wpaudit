@@ -25,9 +25,10 @@ def run_scan(state, config):
         state.save_state()
         return
 
-    if state.get_full_state().get("tool_checks", {}).get("arjun", {}).get("status") != "Found":
-        print("    [!] Arjun tool not found or check failed. Skipping parameter finding.")
-        state.update_module_findings(module_findings_key, {"status": "Skipped (Arjun Missing)", "target_url": target_url})
+    arjun_check_status = state.get_full_state().get("tool_checks", {}).get("arjun", {}).get("status", "Not Found")
+    if not (arjun_check_status.startswith("Found") or arjun_check_status == "Check Skipped (No Version Cmd)"):
+        print(f"    [!] Arjun tool not found or check failed (Status: {arjun_check_status}). Skipping parameter finding.")
+        state.update_module_findings(module_findings_key, {"status": f"Skipped (Arjun Status: {arjun_check_status})", "target_url": target_url})
         state.mark_phase_executed("param_fuzz")
         state.save_state()
         return

@@ -1,5 +1,6 @@
 # Module for WordPress Authentication Hardening Checks
 import requests # Retained for context
+import re # Added import for re module
 from .utils import make_request
 
 from bs4 import BeautifulSoup
