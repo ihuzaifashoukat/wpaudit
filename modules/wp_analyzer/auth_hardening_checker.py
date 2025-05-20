@@ -1,9 +1,8 @@
 # Module for WordPress Authentication Hardening Checks
-import requests
-import re
-from urllib.parse import urljoin
+import requests # Retained for context
+from .utils import make_request
+
 from bs4 import BeautifulSoup
-from core.utils import make_request
 
 # Footprints for CAPTCHA plugins (expanded)
 CAPTCHA_FOOTPRINTS_AUTH = {

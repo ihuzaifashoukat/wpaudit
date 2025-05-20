@@ -3,7 +3,7 @@ import requests
 import re
 from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup # Not strictly needed for current remote checks, but retained
-from core.utils import make_request
+from .utils import make_request
 
 def analyze_configuration(state, config, target_url):
     """

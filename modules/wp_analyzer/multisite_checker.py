@@ -3,7 +3,7 @@ import requests
 import re
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
-from core.utils import make_request
+from .utils import make_request
 
 def analyze_multisite(state, config, target_url):
     """

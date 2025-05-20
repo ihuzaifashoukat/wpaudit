@@ -3,7 +3,7 @@ import requests
 import re
 import base64
 from urllib.parse import urlparse, parse_qs, urlencode, quote_plus
-from core.utils import make_request
+from .utils import make_request
 
 # Common parameters that might be vulnerable to LFI/RFI
 LFI_RFI_TARGET_PARAMS = [

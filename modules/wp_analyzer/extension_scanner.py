@@ -3,7 +3,7 @@ import requests
 import re
 from urllib.parse import urlparse, urljoin, parse_qs
 from bs4 import BeautifulSoup # Ensure this is imported
-from core.utils import make_request
+from .utils import make_request
 
 # Regex patterns to find theme/plugin slugs in URLs
 THEME_PATTERN = re.compile(r'/wp-content/themes/([^/]+)/')

@@ -3,7 +3,7 @@ import requests
 import re
 import time
 from urllib.parse import urlparse, parse_qs, urlencode, urljoin
-from core.utils import make_request
+from .utils import make_request
 
 # Expanded common parameters that might be vulnerable to SSRF
 SSRF_TARGET_PARAMS = [

@@ -1,7 +1,7 @@
 # Module for WordPress Cron Job (wp-cron.php) Analysis
 import requests
 from urllib.parse import urljoin
-from core.utils import make_request # Assuming a utility for requests exists
+from .utils import make_request # Assuming a utility for requests exists
 
 def analyze_cron(state, config, target_url):
     """

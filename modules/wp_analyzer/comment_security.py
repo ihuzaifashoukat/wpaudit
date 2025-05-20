@@ -3,7 +3,7 @@ import requests
 import re
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
-from core.utils import make_request # Assuming a utility for requests exists
+from .utils import make_request # Assuming a utility for requests exists
 
 def find_post_with_comments(state, config, target_url):
     """Attempts to find a URL that likely has comments enabled."""

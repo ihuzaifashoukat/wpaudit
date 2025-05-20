@@ -2,7 +2,7 @@
 import requests
 import re # For plugin footprint detection
 from urllib.parse import urljoin
-from core.utils import make_request # Assuming a utility for requests exists
+from .utils import make_request # Assuming a utility for requests exists
 
 # Common alternative admin paths (non-exhaustive)
 COMMON_ALT_ADMIN_PATHS = [

@@ -41,14 +41,14 @@ TOOL_VERSION_COMMANDS = {
 # Regex to extract version string (more specific per tool)
 TOOL_VERSION_REGEX = {
     "nmap": r"Nmap version ([\d.]+)",
-    "wpscan": r"(?:\[\+\]\s*)?WordPress Security Scanner version\s+([\d.]+)", # Made more robust
-    "nuclei": r"Nuclei Engine Version:\s*v?([\d.]+)", # Allow optional v
-    "sqlmap": r"^([\d.]+(?:#\w+)?)", # Matches "1.9.4#stable" from start of line
-    "searchsploit": r"SearchSploit version:\s*([\d.]+)", # Adjusted for typical output of --version
+    "wpscan": r"([\d]+\.[\d]+\.[\d]+(?:\.\d+)?)", # Looks for X.Y.Z or X.Y.Z.A pattern anywhere, robust for WPScan
+    "nuclei": r"Nuclei Engine Version:\s*v?([\d.]+)",
+    "sqlmap": r"^([\d.]+)(?:#\w+)?", 
+    "searchsploit": r"(\d+\.\d+\.\d+)", # Searchsploit -v often just prints version like "4.9.12" or similar in its banner
     "msfconsole": r"Framework Version:\s*([\d.]+)",
-    "subfinder": r"Current Version:\s*v([\d.]+)", # Adjusted to match actual output
-    "ffuf": r"ffuf version:\s*v?([\d.]+(?:-dev)?)", # Allow optional v and -dev suffix
-    "arjun": r"Arjun v([\d.]+)" # Arjun's version command itself fails (RC=2), regex is likely fine if command worked.
+    "subfinder": r"Current Version:\s*v([\d.]+)",
+    "ffuf": r"ffuf version:\s*v?([\d.]+(?:-dev)?)",
+    "arjun": r"Arjun\s*v([\d.]+)" # Arjun vX.Y.Z
 }
 
 # Minimum required versions (optional, can be expanded)
@@ -86,8 +86,20 @@ def _check_single_tool(tool_key, config, state):
         
         output_for_regex = process.stdout + process.stderr # Some tools print version to stderr
 
-        if process.returncode == 0 or (tool_key == "sqlmap" and process.returncode !=0 and "usage: sqlmap" in output_for_regex.lower()): # SQLMap --version exits non-zero but prints version
-            # Tool executed, try to parse version
+        # Special handling for tools that might exit non-zero but are present
+        # Arjun (RC=2), Searchsploit (RC=2 if using --version and it prints to stderr or has an issue)
+        # SQLMap (RC!=0 but prints usage and version)
+        is_present_despite_rc = False
+        if tool_key == "arjun" and "Arjun" in output_for_regex: # Arjun prints its name even on RC=2
+            is_present_despite_rc = True
+        elif tool_key == "searchsploit" and ("Exploit Database" in output_for_regex or "Usage: searchsploit" in output_for_regex): # Searchsploit prints banner
+            is_present_despite_rc = True
+        elif tool_key == "sqlmap" and "usage: sqlmap" in output_for_regex.lower(): # SQLMap specific
+             is_present_despite_rc = True
+
+
+        if process.returncode == 0 or is_present_despite_rc:
+            # Tool executed or considered present, try to parse version
             tool_check_result["status"] = "Found (Version Unknown)" # Default if regex fails
             version_str = "Unknown"
             

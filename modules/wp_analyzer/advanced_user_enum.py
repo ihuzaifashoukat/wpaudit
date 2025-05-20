@@ -1,10 +1,12 @@
 # Module for Advanced WordPress User Enumeration Techniques
-import requests
+import requests # Retained for context
+from urllib.parse import urljoin, urlparse
+from .utils import make_request
 import re
-import json # For parsing JSON API responses
-from urllib.parse import urljoin, urlparse, quote
+import json
+
 from bs4 import BeautifulSoup
-from core.utils import make_request
+# Removed duplicate: from core.utils import make_request
 
 def _find_first_post_url(target_url, config):
     """Helper to find a likely first post URL for oEmbed checks."""

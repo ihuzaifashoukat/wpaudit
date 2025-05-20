@@ -4,7 +4,8 @@ import json
 import re
 import time # For time-based SQLi
 from urllib.parse import urljoin, urlencode, quote_plus
-from core.utils import make_request, sanitize_filename
+from .utils import make_request
+from core.utils import sanitize_filename # sanitize_filename is from core
 
 # Known core WordPress REST API namespaces (non-exhaustive, can be expanded)
 CORE_REST_NAMESPACES = [

@@ -3,7 +3,7 @@ import requests
 import re
 from urllib.parse import urljoin, urlparse, parse_qs
 from bs4 import BeautifulSoup
-from core.utils import make_request # Assuming a utility for requests exists
+from .utils import make_request # Assuming a utility for requests exists
 
 # Placeholder for vulnerability database interaction
 # CORE_VULN_DB = {}

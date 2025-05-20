@@ -8,7 +8,7 @@ import base64   # Added for dynamic Base64 payload generation
 # --- Mock Objects for Standalone Testing (Remove or comment out in a real project) ---
 # Attempt to import the real make_request, fallback to mock if not found or for testing
 try:
-    from core.utils import make_request
+    from .utils import make_request
 except ImportError:
     print("WARN: core.utils.make_request not found, using mock function.")
     class MockResponse:

@@ -151,7 +151,7 @@ Kali Linux has specific considerations for Python package management and comes w
     Many tools are available via `apt`. You can try to install them using:
     ```bash
     sudo apt update
-    sudo apt install -y nmap wpscan nuclei sqlmap exploitdb metasploit-framework subfinder ffuf arjun
+    sudo apt install -y nmap wpscan nuclei sqlmap exploitdb metasploit-framework subfinder ffuf arjun wafw00f
     ```
     **Notes on Kali Tool Installation:**
     *   `wpscan`: The command `apt install wpscan` should work on most up-to-date Kali systems. If it doesn't, or if you need a newer version than what `apt` provides, you can install/update it using RubyGems:

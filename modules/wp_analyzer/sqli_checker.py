@@ -2,7 +2,7 @@
 import requests
 import re
 from urllib.parse import urlparse, parse_qs, urlencode, quote_plus
-from core.utils import make_request
+from .utils import make_request
 import difflib # For comparing response bodies (optional, can be heavy)
 
 # Common SQL error patterns (non-exhaustive)
