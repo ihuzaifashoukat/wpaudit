@@ -30,36 +30,36 @@ TOOL_VERSION_COMMANDS = {
     "wpscan": ["wpscan", "--version"],
     "nuclei": ["nuclei", "-version"],
     "sqlmap": ["sqlmap", "--version"],
-    "searchsploit": ["searchsploit", "--version"], # Changed from -v
+    "searchsploit": ["searchsploit", "--version"], 
     "msfconsole": ["msfconsole", "-v"],
     "subfinder": ["subfinder", "-version"],
     "ffuf": ["ffuf", "-V"],
-    "arjun": ["arjun", "--version"],
+    "arjun": ["arjun", "-h"], # Changed to -h for Arjun, as --version shows usage and exits RC=2
     # Add other tools if needed
 }
 
 # Regex to extract version string (more specific per tool)
 TOOL_VERSION_REGEX = {
     "nmap": r"Nmap version ([\d.]+)",
-    "wpscan": r"([\d]+\.[\d]+\.[\d]+(?:\.\d+)?)", # Looks for X.Y.Z or X.Y.Z.A pattern anywhere, robust for WPScan
+    "wpscan": r"([\d]+\.[\d]+\.[\d]+(?:\.\d+)?)", 
     "nuclei": r"Nuclei Engine Version:\s*v?([\d.]+)",
     "sqlmap": r"^([\d.]+)(?:#\w+)?", 
-    "searchsploit": r"(\d+\.\d+\.\d+)", # Searchsploit -v often just prints version like "4.9.12" or similar in its banner
+    "searchsploit": r"(\d+\.\d+\.\d+)", 
     "msfconsole": r"Framework Version:\s*([\d.]+)",
     "subfinder": r"Current Version:\s*v([\d.]+)",
     "ffuf": r"ffuf version:\s*v?([\d.]+(?:-dev)?)",
-    "arjun": r"Arjun\s*v([\d.]+)" # Arjun vX.Y.Z
+    "arjun": r"Arjun\s*v([\d.]+)" # This regex might not match if -h output doesn't contain "Arjun vX.Y.Z"
 }
 
 # Minimum required versions (optional, can be expanded)
 MIN_TOOL_VERSIONS = {
     "nmap": "7.80",
-    "wpscan": "3.8.0", # , adjust as features are used
-    "nuclei": "2.5.0", # 
-    "sqlmap": "1.5",   # 
-     "subfinder": "2.4.0",
-     "ffuf": "1.3.0",
-    "arjun": "2.0"
+    "wpscan": "3.8.0",
+    "nuclei": "2.5.0",
+    "sqlmap": "1.5",
+    "subfinder": "2.4.0",
+    "ffuf": "1.3.0",
+    "arjun": "2.0" # Min version for Arjun might be hard to enforce if version parsing is unreliable
 }
 
 

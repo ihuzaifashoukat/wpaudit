@@ -58,7 +58,7 @@ def _check_waf(state, config, target_url):
     module_key = "waf_info"
     state.update_module_findings(module_key, {"status": "Not Checked"})
 
-    if not config.get("enable_waf_detection", False):
+    if not config.get("enable_waf_detection", True):
         print("    [i] WAF detection is disabled in configuration.")
         state.update_module_findings(module_key, {"status": "Disabled in Config"})
         return

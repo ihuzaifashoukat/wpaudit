@@ -135,37 +135,48 @@ def _check_hsts_details(header_name, header_value, state, url_label):
 
 def analyze_security_headers(state, config, target_url):
     """Analyzes the security headers of the target URL and wp-login.php."""
-    module_key = "wp_analyzer"
-    findings_key = "security_headers_analysis" # New key for enhanced findings
-    findings = state.get_specific_finding(module_key, findings_key, {
-        "status": "Running",
-        "details_summary": "Analyzing security headers...",
-        "target_url_analysis": {},
-        "login_page_analysis": {}
-    })
+    wp_analyzer_module_key = "wp_analyzer" # The main key for all wp_analyzer findings
+    findings_subkey = "security_headers" # Align with the key used in analyzer.py's default_analyzer_findings
+
+    # Get the entire wp_analyzer findings dictionary
+    analyzer_findings = state.get_module_findings(wp_analyzer_module_key, {})
+    
+    # Get or initialize the specific findings for security headers
+    current_phase_findings = analyzer_findings.get(findings_subkey, {})
+    if not current_phase_findings: # Initialize if not present
+        current_phase_findings = {
+            "status": "Running",
+            "details_summary": "Analyzing security headers...",
+            "target_url_analysis": {},
+            "login_page_analysis": {}
+        }
+    current_phase_findings["status"] = "Running" # Ensure status is running
+    analyzer_findings[findings_subkey] = current_phase_findings # Put it back into the main dict
+
     print("    [i] Enhanced Security Header Analysis...")
 
     # Analyze main target URL
-    findings["target_url_analysis"] = _analyze_headers_for_url(target_url, state, config, "Target URL")
+    # _analyze_headers_for_url now needs to be aware it's part of a larger structure or state is passed for remediation
+    current_phase_findings["target_url_analysis"] = _analyze_headers_for_url(target_url, state, config, "Target URL")
 
     # Analyze wp-login.php
     login_url = urljoin(target_url, "wp-login.php")
-    # Check if login page is accessible before analyzing its headers (use findings from login_page.py if available)
-    login_page_info = state.get_module_findings(module_key, {}).get("login_page_analysis", {})
+    # Check if login page is accessible before analyzing its headers
+    # Access the broader wp_analyzer findings to get login_page_analysis results
+    login_page_info = analyzer_findings.get("login_page_analysis", {}) # Assuming login_page_analysis is another subkey
+    
     if login_page_info.get("standard_login_accessible") is True or login_page_info.get("final_login_page_url"):
         effective_login_url = login_page_info.get("final_login_page_url", login_url)
-        findings["login_page_analysis"] = _analyze_headers_for_url(effective_login_url, state, config, "Login Page")
+        current_phase_findings["login_page_analysis"] = _analyze_headers_for_url(effective_login_url, state, config, "Login Page")
     else:
-        print(f"      Skipping header analysis for login page as it was not found accessible by login_page.py module.")
-        findings["login_page_analysis"] = {"url_checked": login_url, "status": "Skipped (Login Page Not Accessible)", "headers_present": {}}
-
+        print(f"      Skipping header analysis for login page as it was not found accessible by login_page analysis.")
+        current_phase_findings["login_page_analysis"] = {"url_checked": login_url, "status": "Skipped (Login Page Not Accessible)", "headers_present": {}}
 
     # Consolidate and add global remediations based on target_url_analysis
-    # (Remediations for login_page specific issues could be added too if different)
-    target_analysis = findings["target_url_analysis"]
+    target_analysis = current_phase_findings["target_url_analysis"]
     if target_analysis.get("status") == "Checked":
         for header_name in target_analysis.get("missing_recommended", []):
-            check_def = header_checks.get(header_name, {}) # Re-access check_def for remediation
+            check_def = header_checks.get(header_name, {})
             state.add_remediation_suggestion(f"sec_header_missing_{sanitize_filename(header_name.lower())}", {
                 "source": "WP Analyzer (Security Headers)", 
                 "description": f"Recommended security header '{header_name}' is missing from the main site response.", 
@@ -192,17 +203,20 @@ def analyze_security_headers(state, config, target_url):
         num_missing = len(target_analysis.get("missing_recommended", []))
         num_misconfigured = len(target_analysis.get("misconfigured", []))
         if num_missing == 0 and num_misconfigured == 0:
-            findings["details_summary"] = "Essential security headers on target URL appear to be present and reasonably configured."
+            current_phase_findings["details_summary"] = "Essential security headers on target URL appear to be present and reasonably configured."
         else:
-            findings["details_summary"] = f"Target URL: {num_missing} recommended headers missing, {num_misconfigured} potentially misconfigured."
+            current_phase_findings["details_summary"] = f"Target URL: {num_missing} recommended headers missing, {num_misconfigured} potentially misconfigured."
             if num_missing > 0: state.add_summary_point(f"Missing {num_missing} security headers on main target.")
-
     else: # Error fetching target URL headers
-        findings["details_summary"] = f"Could not analyze security headers for target URL: {target_analysis.get('status')}"
+        current_phase_findings["details_summary"] = f"Could not analyze security headers for target URL: {target_analysis.get('status')}"
 
-    findings["status"] = "Completed"
-    state.update_specific_finding(module_key, findings_key, findings)
-    print(f"    [+] Enhanced Security Header analysis finished. Summary: {findings['details_summary']}")
+    current_phase_findings["status"] = "Completed"
+    # Update the main analyzer_findings dict with the changes for this sub-module
+    analyzer_findings[findings_subkey] = current_phase_findings
+    # Save the entire updated wp_analyzer findings back to the state
+    state.update_module_findings(wp_analyzer_module_key, analyzer_findings)
+    
+    print(f"    [+] Enhanced Security Header analysis finished. Summary: {current_phase_findings['details_summary']}")
 
 # Need to define header_checks globally or pass it to _analyze_headers_for_url if it's to be used there for remediation text.
 # For now, remediation text is generic if not found in _analyze_headers_for_url's local scope.
