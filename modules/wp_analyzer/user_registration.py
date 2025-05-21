@@ -71,22 +71,29 @@ def _check_reg_form_protections(html_content, reg_form_details):
 
 def analyze_user_registration(state, config, target_url):
     """Analyzes user registration status, paths, and form security aspects."""
-    module_key = "wp_analyzer"
-    findings_key = "user_registration_analysis" # New key for enhanced findings
-    findings = state.get_specific_finding(module_key, findings_key, {
-        "status": "Running",
-        "details_summary": "Analyzing user registration process...",
-        "registration_enabled": None, # True, False, "Unknown"
-        "registration_url_found": None,
-        "registration_form_details": { # Details about the found registration form
-            "captcha_detected": False,
-            "password_policy_hints": {},
-            "email_verification_hint": None,
-            "allows_user_registration_hint": None, # For wp-signup.php on multisite
-            "allows_site_registration_hint": None  # For wp-signup.php on multisite
-        },
-        "default_role_check_status": "Manual check recommended (cannot determine default role remotely without registration)."
-    })
+    wp_analyzer_module_key = "wp_analyzer"
+    findings_subkey = "user_registration" # Align with analyzer.py
+
+    analyzer_findings = state.get_module_findings(wp_analyzer_module_key, {})
+    current_phase_findings = analyzer_findings.get(findings_subkey, {})
+    if not current_phase_findings:
+        current_phase_findings = {
+            "status": "Running",
+            "details_summary": "Analyzing user registration process...",
+            "registration_enabled": None, # True, False, "Unknown"
+            "registration_url_found": None,
+            "registration_form_details": { # Details about the found registration form
+                "captcha_detected": False,
+                "password_policy_hints": {},
+                "email_verification_hint": None,
+                "allows_user_registration_hint": None, # For wp-signup.php on multisite
+                "allows_site_registration_hint": None  # For wp-signup.php on multisite
+            },
+            "default_role_check_status": "Manual check recommended (cannot determine default role remotely without registration)."
+        }
+    current_phase_findings["status"] = "Running"
+    analyzer_findings[findings_subkey] = current_phase_findings
+    
     print("    [i] Analyzing User Registration Security...")
 
     # Common registration paths - wp-signup.php is especially relevant for multisite
@@ -124,13 +131,13 @@ def analyze_user_registration(state, config, target_url):
                 if is_reg_page_keywords and has_reg_form_elements and not is_just_login_form:
                     # Check for messages like "User registration is currently not allowed." or "Registration has been disabled."
                     if "registration is currently not allowed" in text_lower or "registration has been disabled" in text_lower:
-                        findings["registration_enabled"] = False
-                        findings["registration_url_found"] = test_url
+                        current_phase_findings["registration_enabled"] = False
+                        current_phase_findings["registration_url_found"] = test_url
                         print(f"        [+] Registration page found at {test_url}, but explicitly states registration is disabled.")
                         break 
                     else:
-                        findings["registration_enabled"] = True
-                        findings["registration_url_found"] = test_url
+                        current_phase_findings["registration_enabled"] = True
+                        current_phase_findings["registration_url_found"] = test_url
                         registration_page_html = text_content
                         print(f"        [!!!] User/Site registration appears to be OPEN at: {test_url}")
                         break 
@@ -140,28 +147,28 @@ def analyze_user_registration(state, config, target_url):
         except Exception as e:
             print(f"        [-] Error checking registration path {test_url}: {e}")
 
-    if findings["registration_enabled"] is None: # If loop finished without a clear yes/no
-        findings["registration_enabled"] = "Unknown"
-        findings["details_summary"] = "Could not definitively determine if user registration is open at common paths."
+    if current_phase_findings["registration_enabled"] is None: # If loop finished without a clear yes/no
+        current_phase_findings["registration_enabled"] = "Unknown"
+        current_phase_findings["details_summary"] = "Could not definitively determine if user registration is open at common paths."
         print("      [i] Could not definitively determine user registration status from common paths.")
 
     if registration_page_html: # If we found an accessible registration page HTML
-        _check_reg_form_protections(registration_page_html, findings["registration_form_details"])
+        _check_reg_form_protections(registration_page_html, current_phase_findings["registration_form_details"])
         
         # Specific handling for wp-signup.php (multisite context)
-        if findings["registration_url_found"] and "wp-signup.php" in findings["registration_url_found"]:
+        if current_phase_findings["registration_url_found"] and "wp-signup.php" in current_phase_findings["registration_url_found"]:
             if 'name="user_name"' in registration_page_html.lower() or 'name="user_email"' in registration_page_html.lower():
-                findings["registration_form_details"]["allows_user_registration_hint"] = True
+                current_phase_findings["registration_form_details"]["allows_user_registration_hint"] = True
             if 'name="blogname"' in registration_page_html.lower() or 'name="blog_title"' in registration_page_html.lower():
-                findings["registration_form_details"]["allows_site_registration_hint"] = True
+                current_phase_findings["registration_form_details"]["allows_site_registration_hint"] = True
 
     # Consolidate details and add remediations
     summary_parts = []
-    if findings["registration_enabled"] is True:
-        summary_parts.append(f"User/Site registration appears OPEN at {findings['registration_url_found']}.")
-        state.add_critical_alert(f"User/Site registration may be open at {findings['registration_url_found']}.")
+    if current_phase_findings["registration_enabled"] is True:
+        summary_parts.append(f"User/Site registration appears OPEN at {current_phase_findings['registration_url_found']}.")
+        state.add_critical_alert(f"User/Site registration may be open at {current_phase_findings['registration_url_found']}.")
         
-        reg_form_sec = findings["registration_form_details"]
+        reg_form_sec = current_phase_findings["registration_form_details"]
         if not reg_form_sec.get("captcha_detected"):
             summary_parts.append("No CAPTCHA detected on registration form.")
             state.add_remediation_suggestion("user_reg_no_captcha", {
@@ -177,17 +184,20 @@ def analyze_user_registration(state, config, target_url):
         # Default role check remains manual
         state.add_remediation_suggestion("user_registration_open_v2", { # new key
             "source": "WP Analyzer (User Registration)",
-            "description": f"User/Site registration is open at {findings['registration_url_found']}. This can be a security risk if not properly managed (spam, abuse, weak default roles).",
+            "description": f"User/Site registration is open at {current_phase_findings['registration_url_found']}. This can be a security risk if not properly managed (spam, abuse, weak default roles).",
             "severity": "Medium",
             "remediation": "If public registration is not required, disable it (Settings > General > Membership for single sites; Network Admin for multisite). If required, ensure new users get the 'Subscriber' role by default, use strong CAPTCHAs, enforce email verification, and monitor new signups."
         })
 
-    elif findings["registration_enabled"] is False:
-        summary_parts.append(f"User registration appears explicitly disabled (checked at {findings.get('registration_url_found', 'common paths')}).")
+    elif current_phase_findings["registration_enabled"] is False:
+        summary_parts.append(f"User registration appears explicitly disabled (checked at {current_phase_findings.get('registration_url_found', 'common paths')}).")
     else: # Unknown
         summary_parts.append("User registration status at common paths is undetermined.")
 
-    findings["details_summary"] = " ".join(summary_parts) if summary_parts else "User registration checks performed."
-    findings["status"] = "Completed"
-    state.update_specific_finding(module_key, findings_key, findings)
-    print(f"    [+] User Registration analysis finished. Status: {findings['registration_enabled']}. Summary: {findings['details_summary']}")
+    current_phase_findings["details_summary"] = " ".join(summary_parts) if summary_parts else "User registration checks performed."
+    current_phase_findings["status"] = "Completed"
+    
+    analyzer_findings[findings_subkey] = current_phase_findings
+    state.update_module_findings(wp_analyzer_module_key, analyzer_findings)
+    
+    print(f"    [+] User Registration analysis finished. Status: {current_phase_findings['registration_enabled']}. Summary: {current_phase_findings['details_summary']}")

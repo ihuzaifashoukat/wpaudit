@@ -21,7 +21,7 @@ PHASE_TOOL_DEPENDENCIES = {
         {"tool": "msfconsole", "critical": False}
     ],
     # Preflight might check multiple things, but let's assume it needs basic commands if any
-    "preflight": [],
+    "preflight": [{"tool": "wafw00f", "critical": True}],
 }
 
 # Tool name to the command used for version checking
@@ -35,6 +35,7 @@ TOOL_VERSION_COMMANDS = {
     "subfinder": ["subfinder", "-version"],
     "ffuf": ["ffuf", "-V"],
     "arjun": ["arjun", "-h"], # Changed to -h for Arjun, as --version shows usage and exits RC=2
+    "wafw00f": ["wafw00f", "--version"],
     # Add other tools if needed
 }
 
@@ -48,7 +49,8 @@ TOOL_VERSION_REGEX = {
     "msfconsole": r"Framework Version:\s*([\d.]+)",
     "subfinder": r"Current Version:\s*v([\d.]+)",
     "ffuf": r"ffuf version:\s*v?([\d.]+(?:-dev)?)",
-    "arjun": r"Arjun\s*v([\d.]+)" # This regex might not match if -h output doesn't contain "Arjun vX.Y.Z"
+    "arjun": r"Arjun\s*v([\d.]+)", # This regex might not match if -h output doesn't contain "Arjun vX.Y.Z"
+    "wafw00f": r"WAFW00F version ([\d.]+)" # Assuming 'WAFW00F version X.Y.Z' format
 }
 
 # Minimum required versions (optional, can be expanded)

@@ -102,13 +102,20 @@ def _check_and_log_listing(test_url, response, state, config, vulnerable_paths_m
 
 def check_directory_listing(state, config, target_url):
     """Checks for directory listing enabled on common and discovered WordPress directories."""
-    module_key = "wp_analyzer"
-    findings_key = "directory_listing_enhanced" # New key for enhanced findings
-    findings = state.get_specific_finding(module_key, findings_key, {
-        "status": "Running",
-        "vulnerable_paths_map": {}, # Store findings per base path for better organization
-        "details": "Checking for directory listings..."
-    })
+    wp_analyzer_module_key = "wp_analyzer"
+    findings_subkey = "directory_listing" # Align with analyzer.py
+
+    analyzer_findings = state.get_module_findings(wp_analyzer_module_key, {})
+    current_phase_findings = analyzer_findings.get(findings_subkey, {})
+    if not current_phase_findings:
+        current_phase_findings = {
+            "status": "Running",
+            "vulnerable_paths_map": {}, # Store findings per base path for better organization
+            "details": "Checking for directory listings..."
+        }
+    current_phase_findings["status"] = "Running"
+    analyzer_findings[findings_subkey] = current_phase_findings
+
     print("    [i] Enhanced Directory Listing Checks...")
 
     # Common base directories to check
@@ -121,7 +128,7 @@ def check_directory_listing(state, config, target_url):
     ]
     
     # Use a dictionary to store vulnerable paths, keyed by the initial path checked for remediation grouping
-    vulnerable_paths_map = findings.get("vulnerable_paths_map", {})
+    vulnerable_paths_map = current_phase_findings.get("vulnerable_paths_map", {})
 
     # Initial scan of base directories
     for dir_path in base_dirs_to_check:
@@ -163,14 +170,16 @@ def check_directory_listing(state, config, target_url):
             print(f"    [-] Error checking directory {dir_path}: {e}")
             # Log error for this specific path if needed in state
 
-    findings["vulnerable_paths_map"] = vulnerable_paths_map
+    current_phase_findings["vulnerable_paths_map"] = vulnerable_paths_map
     total_vulnerable_unique_urls = sum(len(paths) for paths in vulnerable_paths_map.values())
     if total_vulnerable_unique_urls > 0:
-        findings["status"] = "Vulnerabilities Found"
-        findings["details"] = f"Found {total_vulnerable_unique_urls} path(s) with directory listing enabled. Check 'vulnerable_paths_map' for details."
+        current_phase_findings["status"] = "Vulnerabilities Found"
+        current_phase_findings["details"] = f"Found {total_vulnerable_unique_urls} path(s) with directory listing enabled. Check 'vulnerable_paths_map' for details."
     else:
-        findings["status"] = "Completed (No Listings Found)"
-        findings["details"] = "No directory listings found on checked paths."
+        current_phase_findings["status"] = "Completed (No Listings Found)"
+        current_phase_findings["details"] = "No directory listings found on checked paths."
     
-    state.update_specific_finding(module_key, findings_key, findings)
-    print(f"    [+] Enhanced Directory Listing checks finished. Status: {findings['status']}")
+    analyzer_findings[findings_subkey] = current_phase_findings
+    state.update_module_findings(wp_analyzer_module_key, analyzer_findings)
+    
+    print(f"    [+] Enhanced Directory Listing checks finished. Status: {current_phase_findings['status']}")
