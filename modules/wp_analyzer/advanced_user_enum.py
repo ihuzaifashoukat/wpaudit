@@ -1,9 +1,10 @@
 # Module for Advanced WordPress User Enumeration Techniques
 import requests # Retained for context
-from urllib.parse import quote, urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse, parse_qs # Added parse_qs
 from .utils import make_request
 import re
 import json
+import copy # Added for deepcopy
 
 from bs4 import BeautifulSoup
 # Removed duplicate: from core.utils import make_request
@@ -20,7 +21,7 @@ def _find_first_post_url(target_url, config):
             if oembed_link and oembed_link['href']:
                 # Extract the URL from the oEmbed href attribute's 'url' query parameter
                 parsed_oembed_href = urlparse(oembed_link['href'])
-                query_params = urlparse.parse_qs(parsed_oembed_href.query)
+                query_params = parse_qs(parsed_oembed_href.query) # Corrected: use imported parse_qs
                 if 'url' in query_params and query_params['url']:
                     post_url = query_params['url'][0]
                     print(f"        Found post URL via oEmbed discovery: {post_url}")
@@ -60,27 +61,44 @@ def analyze_advanced_user_enum(state, config, target_url):
     module_key = "wp_analyzer"
     findings_key = "advanced_user_enum"
 
-    all_wp_analyzer_findings = state.get_module_findings(module_key, {})
-    findings = all_wp_analyzer_findings.get(findings_key, {})
-    if not findings: # Initialize with default structure
-        findings = {
-            "status": "Not Run",
-            "details": "Performing advanced user enumeration techniques.",
-            "author_archive_users": [],
-            "oembed_disclosed_authors": [],
-            "rest_api_users": [],
-            "login_error_users": [] # Placeholder
-        }
+    _DEFAULT_ADV_USER_ENUM_FINDINGS = {
+        "status": "Not Run",
+        "details": "Performing advanced user enumeration techniques.",
+        "author_archive_users": [],
+        "oembed_disclosed_authors": [],
+        "rest_api_users": [],
+        "login_error_users": [], # Placeholder
+        "all_discovered_usernames_combined": []
+    }
 
-    findings["status"] = "Running"
-    for list_key in ["author_archive_users", "oembed_disclosed_authors", "rest_api_users", "login_error_users"]:
-        if list_key not in findings:
-            findings[list_key] = []
+    all_wp_analyzer_findings_raw = state.get_module_findings(module_key, {})
+    if not isinstance(all_wp_analyzer_findings_raw, dict):
+        all_wp_analyzer_findings = {}
+    else:
+        all_wp_analyzer_findings = all_wp_analyzer_findings_raw
+        
+    existing_findings = all_wp_analyzer_findings.get(findings_key, {})
+
+    findings = copy.deepcopy(_DEFAULT_ADV_USER_ENUM_FINDINGS)
+
+    if isinstance(existing_findings, dict):
+        for key, value in existing_findings.items():
+            if key in findings: # Only update if key is part of the default structure
+                if isinstance(findings[key], list) and isinstance(value, list):
+                    # For lists, extend while maintaining uniqueness if desired, or simply overwrite/extend
+                    # Here, we'll extend and let downstream logic handle uniqueness if needed for combined list
+                    findings[key].extend(v for v in value if v not in findings[key]) 
+                elif isinstance(findings[key], dict) and isinstance(value, dict):
+                    findings[key].update(value)
+                else:
+                    findings[key] = value # Overwrite for simple types
+
+    findings["status"] = "Running" # Always set status for the current run
             
     all_wp_analyzer_findings[findings_key] = findings
     state.update_module_findings(module_key, all_wp_analyzer_findings) # Save initial state
     
-    all_found_usernames = set() # To store unique usernames across all methods
+    all_found_usernames = set(findings.get("all_discovered_usernames_combined", [])) # Initialize from potentially existing state
 
     # 1. Author Archive Enumeration (/?author=N)
     print("    [i] Attempting user enumeration via author archives (/?author=N)...")

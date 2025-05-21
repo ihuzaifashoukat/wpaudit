@@ -3,6 +3,7 @@ from urllib.parse import urljoin
 import requests # Retained for context
 import re # Added import for re module
 from .utils import make_request
+import copy # Added for deepcopy
 
 from bs4 import BeautifulSoup
 
@@ -61,39 +62,43 @@ def analyze_auth_hardening(state, config, target_url):
     module_key = "wp_analyzer"
     findings_key = "auth_hardening"
 
-    all_wp_analyzer_findings = state.get_module_findings(module_key, {})
-    findings = all_wp_analyzer_findings.get(findings_key, {})
-    if not findings: # Initialize with default structure
-        findings = {
-            "status": "Not Run",
-            "details": "Performing authentication hardening checks...",
-            "login_page_url": None,
-            "login_page_accessible": None,
-            "http_auth_on_login": False,
-            "captcha_details": {"detected_types": [], "on_login_page": False, "on_lost_password_page": False},
-            "tfa_plugin_footprints": [],
-            "login_security_plugin_footprints": [],
-            "clickjacking_protection_login": {"x_frame_options": None, "csp_frame_ancestors": None},
-            "lost_password_page_accessible": None,
-            "password_policy_strength": {"status": "Informational", "details": "Password policy strength is best assessed through configuration review or authenticated testing."},
-            "account_lockout_mechanism": {"status": "Informational", "details": "Account lockout mechanisms are difficult to confirm reliably without potentially disruptive active login attempts."}
-        }
+    _DEFAULT_AUTH_HARDENING_FINDINGS = {
+        "status": "Not Run",
+        "details": "Performing authentication hardening checks...",
+        "login_page_url": None,
+        "login_page_accessible": None,
+        "http_auth_on_login": False, # Crucial key that was missing
+        "captcha_details": {"detected_types": [], "on_login_page": False, "on_lost_password_page": False},
+        "tfa_plugin_footprints": [],
+        "login_security_plugin_footprints": [],
+        "clickjacking_protection_login": {"x_frame_options": None, "csp_frame_ancestors": None},
+        "lost_password_page_accessible": None,
+        "password_policy_strength": {"status": "Informational", "details": "Password policy strength is best assessed through configuration review or authenticated testing."},
+        "account_lockout_mechanism": {"status": "Informational", "details": "Account lockout mechanisms are difficult to confirm reliably without potentially disruptive active login attempts."}
+    }
 
-    findings["status"] = "Running"
-    # Ensure sub-dictionaries and lists are initialized
-    if "captcha_details" not in findings:
-        findings["captcha_details"] = {"detected_types": [], "on_login_page": False, "on_lost_password_page": False}
-    if "tfa_plugin_footprints" not in findings:
-        findings["tfa_plugin_footprints"] = []
-    if "login_security_plugin_footprints" not in findings:
-        findings["login_security_plugin_footprints"] = []
-    if "clickjacking_protection_login" not in findings:
-        findings["clickjacking_protection_login"] = {"x_frame_options": None, "csp_frame_ancestors": None}
-    # Ensure informational sub-dicts are present
-    for info_key in ["password_policy_strength", "account_lockout_mechanism"]:
-        if info_key not in findings:
-             findings[info_key] = {"status": "Informational", "details": "Default message."} # Add appropriate default message if needed
+    all_wp_analyzer_findings_raw = state.get_module_findings(module_key, {})
+    if not isinstance(all_wp_analyzer_findings_raw, dict):
+        all_wp_analyzer_findings = {}
+    else:
+        all_wp_analyzer_findings = all_wp_analyzer_findings_raw
+        
+    existing_findings = all_wp_analyzer_findings.get(findings_key, {})
 
+    findings = copy.deepcopy(_DEFAULT_AUTH_HARDENING_FINDINGS)
+
+    if isinstance(existing_findings, dict):
+        for key, value in existing_findings.items():
+            if key in findings: # Only update if key is part of the default structure
+                if isinstance(findings[key], dict) and isinstance(value, dict):
+                    findings[key].update(value) # Merge nested dicts
+                elif isinstance(findings[key], list) and isinstance(value, list):
+                    findings[key].extend(v for v in value if v not in findings[key]) # Merge lists, avoid duplicates
+                else:
+                    findings[key] = value # Overwrite for simple types or if types don't match for merging
+
+    findings["status"] = "Running" # Always set status for the current run
+    
     all_wp_analyzer_findings[findings_key] = findings
     state.update_module_findings(module_key, all_wp_analyzer_findings) # Save initial state
 

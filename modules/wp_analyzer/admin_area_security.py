@@ -3,6 +3,7 @@ import requests
 import re # For plugin footprint detection
 from urllib.parse import urljoin
 from .utils import make_request # Assuming a utility for requests exists
+import copy # Added for deepcopy
 
 # Common alternative admin paths (non-exhaustive)
 COMMON_ALT_ADMIN_PATHS = [
@@ -73,29 +74,39 @@ def analyze_admin_area_security(state, config, target_url):
     module_key = "wp_analyzer"
     findings_key = "admin_area_security"
 
-    all_wp_analyzer_findings = state.get_module_findings(module_key, {})
-    findings = all_wp_analyzer_findings.get(findings_key, {})
-    if not findings: # Initialize with default structure
-        findings = {
-            "status": "Not Run",
-            "details": "Checking admin area security aspects...",
-            "standard_login_status": {"accessible": None, "http_auth": False, "status_code": None, "redirect_url": None},
-            "standard_admin_dir_status": {"accessible": None, "http_auth": False, "status_code": None, "redirect_url": None},
-            "alternative_admin_paths_found": [],
-            "detected_protection_plugins": [],
-            "htaccess_protection_wp_admin": "Unknown"
-        }
+    _DEFAULT_ADMIN_AREA_SECURITY_FINDINGS = {
+        "status": "Not Run",
+        "details": "Checking admin area security aspects...",
+        "standard_login_status": {"accessible": None, "http_auth": False, "status_code": None, "content_snippet": "", "redirect_url": None},
+        "standard_admin_dir_status": {"accessible": None, "http_auth": False, "status_code": None, "content_snippet": "", "redirect_url": None},
+        "alternative_admin_paths_found": [],
+        "detected_protection_plugins": [],
+        "htaccess_protection_wp_admin": "Unknown" # Crucial key
+    }
 
-    findings["status"] = "Running"
-    # Ensure sub-dictionaries and lists are initialized
-    if "standard_login_status" not in findings:
-        findings["standard_login_status"] = {"accessible": None, "http_auth": False, "status_code": None, "redirect_url": None}
-    if "standard_admin_dir_status" not in findings:
-        findings["standard_admin_dir_status"] = {"accessible": None, "http_auth": False, "status_code": None, "redirect_url": None}
-    if "alternative_admin_paths_found" not in findings:
-        findings["alternative_admin_paths_found"] = []
-    if "detected_protection_plugins" not in findings:
-        findings["detected_protection_plugins"] = []
+    all_wp_analyzer_findings_raw = state.get_module_findings(module_key, {})
+    if not isinstance(all_wp_analyzer_findings_raw, dict):
+        all_wp_analyzer_findings = {}
+    else:
+        all_wp_analyzer_findings = all_wp_analyzer_findings_raw
+        
+    existing_findings = all_wp_analyzer_findings.get(findings_key, {})
+
+    findings = copy.deepcopy(_DEFAULT_ADMIN_AREA_SECURITY_FINDINGS)
+
+    if isinstance(existing_findings, dict):
+        for key, value in existing_findings.items():
+            if key in findings: # Only update if key is part of the default structure
+                if isinstance(findings[key], dict) and isinstance(value, dict):
+                    findings[key].update(value) # Merge nested dicts
+                elif isinstance(findings[key], list) and isinstance(value, list):
+                     # For lists, extend ensuring no duplicates if items are simple (e.g. strings)
+                     # If list contains dicts, more complex merge might be needed or just overwrite.
+                    findings[key].extend(v for v in value if v not in findings[key])
+                else:
+                    findings[key] = value # Overwrite for simple types or if types don't match for merging
+
+    findings["status"] = "Running" # Always set status for the current run
         
     all_wp_analyzer_findings[findings_key] = findings
     state.update_module_findings(module_key, all_wp_analyzer_findings) # Save initial state

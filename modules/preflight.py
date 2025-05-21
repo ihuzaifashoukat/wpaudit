@@ -82,8 +82,8 @@ def _check_waf(state, config, target_url):
 
     if waf_proc_output:
         try:
-            # Remove potential non-JSON header/footer lines wafw00f might add
-            json_match = re.search(r'(\[.*\]|\{.*\})', waf_proc_output, re.DOTALL)
+            # Use a non-greedy regex to better isolate JSON from potential surrounding text/banner.
+            json_match = re.search(r'(\[.*?\]|\{.*?\})', waf_proc_output, re.DOTALL)
             if json_match:
                 waf_data_list = json.loads(json_match.group(1))
                 waf_data = waf_data_list[0] if isinstance(waf_data_list, list) and waf_data_list else (waf_data_list if isinstance(waf_data_list, dict) else {})
