@@ -4,6 +4,7 @@ import re
 from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup # Not strictly needed for current remote checks, but retained
 from .utils import make_request
+import copy # Added for deepcopy
 
 def analyze_configuration(state, config, target_url):
     """
@@ -27,23 +28,44 @@ def analyze_configuration(state, config, target_url):
         "htaccess_rules_check": {"status": "Informational", "message": "Custom .htaccess security rules cannot be verified remotely. Review manually if applicable."}
     }
 
-    all_wp_analyzer_findings = state.get_module_findings(module_key, {})
-    findings = all_wp_analyzer_findings.get(findings_key, {})
-    if not findings: # Initialize with default structure
-        findings = _DEFAULT_CONFIG_AUDIT_STRUCTURE.copy() # Use a copy
+    all_wp_analyzer_findings_raw = state.get_module_findings(module_key, {})
+    if not isinstance(all_wp_analyzer_findings_raw, dict):
+        all_wp_analyzer_findings = {}
+        # Optionally log state corruption
+        # state.add_tool_error(f"Warning: Findings for module '{module_key}' were not a dictionary. Resetting for '{findings_key}'.")
+    else:
+        all_wp_analyzer_findings = all_wp_analyzer_findings_raw
+        
+    existing_findings = all_wp_analyzer_findings.get(findings_key, {})
+
+    # Start with a deep copy of the default structure
+    findings = copy.deepcopy(_DEFAULT_CONFIG_AUDIT_STRUCTURE)
+
+    # Update with existing findings if they are a dictionary
+    if isinstance(existing_findings, dict):
+        for key, value in existing_findings.items():
+            # For nested dictionaries (sub-checks), merge them carefully
+            if key in findings and isinstance(findings[key], dict) and isinstance(value, dict):
+                findings[key].update(value)
+            # For other top-level keys in the default structure
+            elif key in findings:
+                findings[key] = value
+            # Keys from existing_findings not in _DEFAULT_CONFIG_AUDIT_STRUCTURE are ignored.
     
-    findings["status"] = "Running"
-    # Ensure sub-dictionaries are initialized if findings were pre-existing but incomplete
-    for sub_key in ["wp_debug_check", "disallow_file_edit_check", "force_ssl_admin_check", 
-                    "db_prefix_check", "security_keys_check", "file_permissions_check", "htaccess_rules_check"]:
-        if sub_key not in findings: # This case is less likely if the main `findings` was just initialized above
-            findings[sub_key] = {"status": "Not Run"} # Basic init for sub-checks
-            # Use the defined default structure to get the message if available
-            default_sub_info = _DEFAULT_CONFIG_AUDIT_STRUCTURE.get(sub_key, {})
-            if "message" in default_sub_info:
-                 findings[sub_key]["message"] = default_sub_info["message"]
+    findings["status"] = "Running" # Always set status for the current run
 
-
+    # Ensure all sub-check keys from default structure exist and have at least a status and message if applicable
+    # This also handles the case where existing_findings might have been incomplete or malformed for sub-checks
+    for sub_key in _DEFAULT_CONFIG_AUDIT_STRUCTURE.keys():
+        if sub_key not in ["status", "details"]: # These are top-level, not sub-checks
+            if sub_key not in findings or not isinstance(findings[sub_key], dict): # If sub_key missing or not a dict
+                findings[sub_key] = copy.deepcopy(_DEFAULT_CONFIG_AUDIT_STRUCTURE[sub_key]) # Re-initialize from default
+            else: # Sub_key exists and is a dict, ensure 'status' and 'message' (if in default) are present
+                if "status" not in findings[sub_key]:
+                    findings[sub_key]["status"] = _DEFAULT_CONFIG_AUDIT_STRUCTURE[sub_key].get("status", "Not Run")
+                if "message" in _DEFAULT_CONFIG_AUDIT_STRUCTURE[sub_key] and "message" not in findings[sub_key]:
+                    findings[sub_key]["message"] = _DEFAULT_CONFIG_AUDIT_STRUCTURE[sub_key]["message"]
+    
     all_wp_analyzer_findings[findings_key] = findings
     state.update_module_findings(module_key, all_wp_analyzer_findings) # Save initial state
 
