@@ -63,9 +63,10 @@ def _check_waf(state, config, target_url):
         state.update_module_findings(module_key, {"status": "Disabled in Config"})
         return
 
-    if state.get_full_state()["tool_checks"].get("wafw00f", {}).get("status") != "Found":
-        print("    [i] Wafw00f tool not found or check failed. Skipping WAF detection.")
-        state.update_module_findings(module_key, {"status": "Skipped (Tool Missing/Failed Check)"})
+    wafw00f_check_status = state.get_full_state()["tool_checks"].get("wafw00f", {}).get("status", "Not Found")
+    if not wafw00f_check_status.startswith("Found"):
+        print(f"    [i] Wafw00f tool status is '{wafw00f_check_status}'. Skipping WAF detection.")
+        state.update_module_findings(module_key, {"status": "Skipped (Tool Check Status: " + wafw00f_check_status + ")"})
         return
 
     print(f"\n    Attempting WAF detection using Wafw00f for {target_url}...")

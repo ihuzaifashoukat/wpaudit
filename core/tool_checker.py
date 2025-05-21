@@ -106,32 +106,28 @@ def _check_single_tool(tool_key, config, state):
             parsed_successfully = False
 
             if tool_key == "arjun":
-                # Arjun specific logic: only use its specific regex.
                 arjun_regex = TOOL_VERSION_REGEX.get("arjun")
                 if arjun_regex:
                     match = re.search(arjun_regex, output_for_regex, re.IGNORECASE)
                     if match:
                         version_str = match.group(1).strip()
                         parsed_successfully = True
-                    else:
-                        print(f"      [?] {tool_key}: Specific version regex did not match. Output snippet: {output_for_regex[:100].strip()}")
-                        # version_str remains "Unknown", parsed_successfully remains False
-                else: # Should not happen if TOOL_VERSION_REGEX["arjun"] is defined
-                    print(f"      [!] {tool_key}: No specific regex defined for arjun in TOOL_VERSION_REGEX.")
-                
-                # Diagnostic print for Arjun after its specific attempt
-                print(f"      [i] {tool_key}: Arjun processing complete. Version determined: '{version_str}', Parsed successfully: {parsed_successfully}")
-
+                    # If no match, version_str remains "Unknown", parsed_successfully remains False
+                # Set tool_check_result directly for arjun based on this specific attempt
+                tool_check_result["version"] = version_str
+                if parsed_successfully:
+                    tool_check_result["status"] = "Found"
+                else:
+                    tool_check_result["status"] = "Found (Version Unknown)"
+                    print(f"      [i] {tool_key}: Specific version regex did not match. Version set to 'Unknown'. Output snippet: {output_for_regex[:100].strip()}")
             else:
-                # Logic for all other tools
+                # Logic for all other tools (including wafw00f)
                 version_regex_pattern = TOOL_VERSION_REGEX.get(tool_key)
                 if version_regex_pattern:
                     match = re.search(version_regex_pattern, output_for_regex, re.IGNORECASE)
                     if match:
                         version_str = match.group(1).strip()
                         parsed_successfully = True
-                    else:
-                        print(f"      [?] {tool_key}: Specific version regex did not match. Output snippet: {output_for_regex[:100].strip()}")
                 
                 if not parsed_successfully: # Try generic patterns if specific failed or wasn't defined
                     generic_patterns = [
@@ -145,64 +141,53 @@ def _check_single_tool(tool_key, config, state):
                             version_str = generic_match.group(1).strip()
                             parsed_successfully = True
                             break
-            
-            # Common logic for setting status based on parsing results
-            if parsed_successfully:
-                tool_check_result["status"] = "Found"
+                
+                # Set tool_check_result for other tools
                 tool_check_result["version"] = version_str
-            else:
-                tool_check_result["status"] = "Found (Version Unknown)"
-                tool_check_result["version"] = "Unknown" # Ensure this is explicitly "Unknown"
-                # Avoid printing "Could not parse version string" if it's arjun and specific regex failed, as that's expected for -h
-                if tool_key != "arjun": 
-                    print(f"      [?] {tool_key}: Could not parse version string from output (final).")
-                elif tool_key == "arjun" and not parsed_successfully : # If arjun and still not parsed (i.e. specific regex failed)
-                    print(f"      [i] {tool_key}: Version remains 'Unknown' as specific regex did not match and generic patterns were not attempted.")
+                if parsed_successfully:
+                    tool_check_result["status"] = "Found"
+                else:
+                    tool_check_result["status"] = "Found (Version Unknown)"
+                    print(f"      [?] {tool_key}: Could not parse version string from output. Version set to 'Unknown'. Output snippet: {output_for_regex[:100].strip()}")
 
-
-            # Common logic for version comparison
+            # Common version comparison logic, using tool_check_result["version"] which is now set
             min_version_str = MIN_TOOL_VERSIONS.get(tool_key)
-            current_version_for_comparison = tool_check_result["version"]
-            
-            version_is_valid_for_comparison = (current_version_for_comparison != "Unknown" and 
-                                               current_version_for_comparison != "N/A")
+            current_version_value = tool_check_result["version"] # This is the version string to compare
 
-            if tool_key == "arjun" and version_is_valid_for_comparison:
-                # Additional check for Arjun: if version string looks like an IP, treat as invalid for comparison.
+            # Special IP check for Arjun's version string before comparison
+            if tool_key == "arjun" and current_version_value != "Unknown":
                 ip_like_pattern = r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$"
-                if re.match(ip_like_pattern, current_version_for_comparison):
-                    print(f"      [!] Arjun: Version '{current_version_for_comparison}' resembles an IP address. Treating as 'Unknown' for version comparison.")
-                    # Force version to be treated as Unknown for comparison logic below
-                    version_is_valid_for_comparison = False 
-                    # Correct the status and stored version if it was misparsed as a valid version string previously
-                    if tool_check_result["status"] != "Found (Version Unknown)":
-                        tool_check_result["status"] = "Found (Version Unknown)"
-                        tool_check_result["version"] = "Unknown" # Update the stored version to Unknown
-                    # current_version_for_comparison is not directly changed here, but version_is_valid_for_comparison controls flow
+                if re.match(ip_like_pattern, current_version_value):
+                    print(f"      [!] Arjun: Parsed version '{current_version_value}' resembles an IP. Overriding to 'Unknown' for comparison.")
+                    current_version_value = "Unknown" # Override for comparison
+                    tool_check_result["version"] = "Unknown" # Also update the stored result
+                    tool_check_result["status"] = "Found (Version Unknown)" # Ensure status reflects this
 
-            if version_is_valid_for_comparison and min_version_str:
+            if current_version_value != "Unknown" and current_version_value != "N/A" and min_version_str:
                 try:
-                    # Use the (potentially corrected for Arjun) current_version_for_comparison
-                    # If Arjun's version was an IP, version_is_valid_for_comparison is now False, skipping this.
-                    # Otherwise, current_version_for_comparison holds the string to parse.
-                    parsed_current_ver = parse_version(current_version_for_comparison) 
+                    parsed_current_ver = parse_version(current_version_value)
                     parsed_min_ver = parse_version(min_version_str)
                     if parsed_current_ver >= parsed_min_ver:
                         tool_check_result["version_ok"] = True
-                        tool_check_result["status"] = "Found (Version OK)"
-                        print(f"      [+] Found {tool_key} (Version: {current_version_for_comparison} >= {min_version_str}) at {actual_command_path}")
+                        tool_check_result["status"] = "Found (Version OK)" # Status might be re-set here
+                        print(f"      [+] Found {tool_key} (Version: {current_version_value} >= {min_version_str}) at {actual_command_path}")
                     else:
                         tool_check_result["version_ok"] = False
-                        tool_check_result["status"] = "Found (Version Too Low)"
-                        print(f"      [!] Found {tool_key} (Version: {current_version_for_comparison} < Required: {min_version_str}) at {actual_command_path}")
+                        tool_check_result["status"] = "Found (Version Too Low)" # Status might be re-set here
+                        print(f"      [!] Found {tool_key} (Version: {current_version_value} < Required: {min_version_str}) at {actual_command_path}")
                 except InvalidVersion:
                     tool_check_result["version_ok"] = "Parse Error"
-                    print(f"      [?] Could not parse version '{current_version_for_comparison}' (tool) or '{min_version_str}' (min_req) for {tool_key} comparison.")
-            elif current_version_for_comparison != "Unknown" and current_version_for_comparison != "N/A": # Version found, but no min_version defined
+                    # Status remains as determined by parsing (e.g., "Found" or "Found (Version Unknown)")
+                    # but we add a note about the parse error for comparison.
+                    print(f"      [?] Could not parse version '{current_version_value}' (tool) or '{min_version_str}' (min_req) for {tool_key} comparison.")
+            elif current_version_value != "Unknown" and current_version_value != "N/A": # Version found, no min_version
                  tool_check_result["version_ok"] = "Not Checked"
-                 tool_check_result["status"] = "Found (Version OK)"
-                 print(f"      [+] Found {tool_key} (Version: {current_version_for_comparison}) at {actual_command_path} (No minimum version specified).")
-            # If current_version_for_comparison is "Unknown", status remains "Found (Version Unknown)"
+                 # Status remains as determined by parsing, typically "Found" if parsed_successfully was true.
+                 # If it was "Found (Version OK)" already, this is fine. If it was just "Found", this is also fine.
+                 # We ensure it's at least "Found (Version OK)" if a version string is present.
+                 if tool_check_result["status"] == "Found": tool_check_result["status"] = "Found (Version OK)"
+                 print(f"      [+] Found {tool_key} (Version: {current_version_value}) at {actual_command_path} (No minimum version specified).")
+            # If current_version_value is "Unknown", tool_check_result["status"] should already be "Found (Version Unknown)"
 
         elif process.returncode != 0 and not is_present_despite_rc: # Genuine failure to execute or not found
              # Check if it's a "command not found" type of error or other execution error
