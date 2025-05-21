@@ -150,7 +150,7 @@ def run_scan(state, config):
 
     command.extend(["-oX", nmap_output_xml, target_ip])
 
-    nmap_timeout = config.get("nmap_timeout", 1200) # Default 20 minutes
+    nmap_timeout = config.get("nmap_timeout", 7200) # Default 2 hours (increased from 1200s)
     process_obj = run_command(command, "Nmap", config, timeout=nmap_timeout, return_proc=True)
 
     state.update_module_findings("nmap_results", {"raw_xml_path": nmap_output_xml})

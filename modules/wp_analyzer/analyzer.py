@@ -159,7 +159,8 @@ def run_analysis(state, config):
                 state.mark_phase_executed(phase_marker) # Mark individual sub-phase
             except Exception as e:
                 print(f"    [-] Error during {name} analysis: {e}")
-                state.add_error_log(module_key, f"Error in {name} analysis module: {type(e).__name__} - {e}")
+                error_message = f"Module: {module_key}, Sub-module: {name}, Error: {type(e).__name__} - {e}"
+                state.add_tool_error(error_message)
                 # Update the specific finding for this sub-module to reflect the error
                 # This requires a mapping from 'name' or 'func' to the actual key in `default_analyzer_findings`
                 # For now, this is a general error. Individual modules should set their own status to "Error" on failure.

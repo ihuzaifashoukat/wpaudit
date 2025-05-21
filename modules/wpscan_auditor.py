@@ -73,6 +73,15 @@ def run_scan(state, config, target_urls=None): # Added target_urls
                 print(f"    [!] WPScan wordlist placeholder used, but path '{wordlist_actual_path}' invalid/not set. Removing password attack options.")
                 wpscan_cli_options_str = re.sub(r'--wordlist\s+\S*', '', wpscan_cli_options_str).strip()
                 wpscan_cli_options_str = re.sub(r'--password-attack\s+\S+', '', wpscan_cli_options_str).strip()
+        
+        # Remove --api-detection if present, as it's invalid
+        if "--api-detection" in wpscan_cli_options_str:
+            print("    [!] Found invalid '--api-detection' option in profile, removing it.")
+            # This regex attempts to remove '--api-detection' and its subsequent argument (e.g., 'aggressive')
+            wpscan_cli_options_str = re.sub(r'--api-detection\s+\S+', '', wpscan_cli_options_str).strip()
+            # If it was the only option, it might be empty now.
+            wpscan_cli_options_str = wpscan_cli_options_str.strip()
+
 
         if wpscan_cli_options_str: command.extend(wpscan_cli_options_str.split())
 
