@@ -24,7 +24,7 @@ output_dir: "wpaudit_reports"
 report_prefix: "wpaudit_report"
 
 # --- General Settings ---
-default_user_agent: "WPAUDIT/2.0 (Ethical Audit; +http://example.com/botinfo)"
+default_user_agent: "WPAUDIT/2.0 (Ethical Audit)"
 interactive_prompts: true
 respect_robots_txt: false
 enable_waf_detection: true
@@ -93,7 +93,7 @@ exploit_intel_autorun_lhost: "127.0.0.1" # Default LHOST for reverse shells (use
 exploit_intel_autorun_lport_start: 4444 # Starting LPORT for reverse shells
 
 # --- Tool Timeouts (in seconds) ---
-nmap_timeout: 1200
+nmap_timeout: 12000
 wpscan_timeout: 3600
 nuclei_timeout: 7200
 sqlmap_timeout_per_target: 7200

@@ -311,13 +311,26 @@ def _test_injection_point(url_to_test, http_method, param_or_data_config, field_
 
 
 def analyze_xss(state, config, target_url):
-    module_key = "wp_analyzer_xss" # Make key more specific
-    findings_key = "contextual_xss_findings"
-    findings = state.get_specific_finding(module_key, findings_key, {
-        "status": "Running", "details": "Performing enhanced heuristic XSS checks...",
-        "potential_reflected_xss": [],
-        "recommendation": "Use dedicated XSS scanning tools with browser engines for comprehensive analysis. Verify all findings manually."
-    })
+    module_key = "wp_analyzer_xss" # This module stores its findings under its own top-level key
+    # The findings_key within this module's structure can be considered the root of its findings.
+    # For simplicity, we'll treat the entire data for module_key as its "findings".
+    
+    # Get existing findings for this module, or initialize if not present
+    findings = state.get_module_findings(module_key, {})
+    if not findings: # Initialize with default structure
+        findings = {
+            "status": "Not Checked",
+            "details": "",
+            "potential_reflected_xss": [],
+            "recommendation": "Use dedicated XSS scanning tools with browser engines for comprehensive analysis. Verify all findings manually."
+        }
+
+    findings["status"] = "Running"
+    findings["details"] = "Performing enhanced heuristic XSS checks..."
+    if "potential_reflected_xss" not in findings: # Ensure list is present
+        findings["potential_reflected_xss"] = []
+    
+    state.update_module_findings(module_key, findings) # Save initial state
 
     print(f"    [i] Starting XSS heuristic checks for {target_url} (URL params, forms, fragments)...")
     reflected_points = []
@@ -553,7 +566,9 @@ def analyze_xss(state, config, target_url):
         findings["details"] = "No XSS reflections found from enhanced heuristic checks. This does not rule out DOM-based or complex stored XSS, or XSS in non-2xx/3xx responses."
 
     findings["status"] = "Completed"
-    state.update_specific_finding(module_key, findings_key, findings)
+    # Since module_key "wp_analyzer_xss" directly holds these findings,
+    # we update the whole structure for this module_key.
+    state.update_module_findings(module_key, findings)
     print(f"    [+] Advanced XSS heuristic checks finished. Details: {findings['details']}")
 
 

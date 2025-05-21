@@ -47,12 +47,24 @@ BENIGN_EXTERNAL_PAYLOAD = "http://scanme.nmap.org" # A known, benign external ho
 def analyze_ssrf(state, config, target_url):
     module_key = "wp_analyzer"
     findings_key = "contextual_ssrf"
-    findings = state.get_specific_finding(module_key, findings_key, {
-        "status": "Running",
-        "details": "Performing enhanced heuristic SSRF checks. This is not a full SSRF scan.",
-        "potential_ssrf_points": [],
-        "recommendation": "Use dedicated SSRF scanning tools and out-of-band (OOB) techniques for comprehensive analysis."
-    })
+
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {})
+    findings = all_wp_analyzer_findings.get(findings_key, {})
+    if not findings: # Initialize with default structure
+        findings = {
+            "status": "Not Checked",
+            "details": "",
+            "potential_ssrf_points": [],
+            "recommendation": "Use dedicated SSRF scanning tools and out-of-band (OOB) techniques for comprehensive analysis."
+        }
+
+    findings["status"] = "Running"
+    findings["details"] = "Performing enhanced heuristic SSRF checks. This is not a full SSRF scan."
+    if "potential_ssrf_points" not in findings:
+        findings["potential_ssrf_points"] = []
+        
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings) # Save initial state
 
     print("    [i] Performing enhanced SSRF heuristic checks (not a full scan)...")
     
@@ -64,7 +76,9 @@ def analyze_ssrf(state, config, target_url):
     if not original_query_params:
         findings["details"] = "No query parameters in target URL to test for SSRF."
         findings["status"] = "Completed"
-        state.update_specific_finding(module_key, findings_key, findings)
+        all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch
+        all_wp_analyzer_findings[findings_key] = findings
+        state.update_module_findings(module_key, all_wp_analyzer_findings)
         print("      [i] No query parameters in target URL for SSRF checks.")
         return
 
@@ -180,6 +194,8 @@ def analyze_ssrf(state, config, target_url):
         findings["details"] = "No obvious SSRF indicators found from enhanced heuristic checks on URL parameters. This does not rule out SSRF. Use specialized tools and OOB techniques for thorough testing."
 
     findings["status"] = "Completed"
-    state.update_specific_finding(module_key, findings_key, findings)
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings)
     print(f"    [+] Enhanced SSRF heuristic checks finished. Details: {findings['details']}")
     print("    [IMPORTANT] For reliable SSRF detection, especially blind SSRF, use tools that leverage out-of-band (OOB) callback mechanisms.")

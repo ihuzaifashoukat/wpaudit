@@ -57,13 +57,26 @@ def analyze_file_inclusion(state, config, target_url):
     """
     module_key = "wp_analyzer"
     findings_key = "file_inclusion"
-    findings = state.get_specific_finding(module_key, findings_key, {
-        "status": "Running",
-        "details": "Performing enhanced heuristic LFI/RFI checks...",
-        "potential_lfi_points": [],
-        "potential_rfi_points": [],
-        "recommendation": "Use dedicated LFI/RFI scanning tools and techniques for comprehensive analysis."
-    })
+
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {})
+    findings = all_wp_analyzer_findings.get(findings_key, {})
+    if not findings: # Initialize with default structure
+        findings = {
+            "status": "Not Checked",
+            "details": "",
+            "potential_lfi_points": [],
+            "potential_rfi_points": [],
+            "recommendation": "Use dedicated LFI/RFI scanning tools and techniques for comprehensive analysis."
+        }
+
+    findings["status"] = "Running"
+    findings["details"] = "Performing enhanced heuristic LFI/RFI checks..."
+    for list_key in ["potential_lfi_points", "potential_rfi_points"]:
+        if list_key not in findings:
+            findings[list_key] = []
+            
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings) # Save initial state
 
     print("    [i] Performing enhanced LFI/RFI heuristic checks...")
     
@@ -75,7 +88,9 @@ def analyze_file_inclusion(state, config, target_url):
     if not original_query_params:
         findings["details"] = "No query parameters in target URL to test for LFI/RFI."
         findings["status"] = "Completed"
-        state.update_specific_finding(module_key, findings_key, findings)
+        all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch
+        all_wp_analyzer_findings[findings_key] = findings
+        state.update_module_findings(module_key, all_wp_analyzer_findings)
         print("      [i] No query parameters in target URL for LFI/RFI checks.")
         return
 
@@ -194,5 +209,7 @@ def analyze_file_inclusion(state, config, target_url):
         findings["details"] = "No obvious LFI/RFI indicators from enhanced heuristics. This does not rule out File Inclusion. Use specialized tools."
 
     findings["status"] = "Completed"
-    state.update_specific_finding(module_key, findings_key, findings)
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings)
     print(f"    [+] Enhanced LFI/RFI heuristic checks finished. Details: {findings['details']}")

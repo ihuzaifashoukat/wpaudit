@@ -91,6 +91,50 @@ class ScanState:
         with self._lock:
             return self._state["findings"].get(module_key, default)
 
+    def get_specific_finding(self, module_key: str, path_keys: list, default=None):
+        """
+        Retrieves a specific nested finding from a module's findings.
+        :param module_key: The key for the module (e.g., 'wp_analyzer').
+        :param path_keys: A list of keys representing the path to the nested finding 
+                          (e.g., ['configuration_audit', 'wp_debug_check', 'status']).
+        :param default: The value to return if the path is not found.
+        :return: The specific finding or the default value.
+        """
+        with self._lock:
+            module_data = self._state["findings"].get(module_key)
+            if module_data is None:
+                return default
+            
+            current_level = module_data
+            for key in path_keys:
+                if isinstance(current_level, dict) and key in current_level:
+                    current_level = current_level[key]
+                else:
+                    return default
+            return current_level
+
+    def update_specific_finding(self, module_key: str, path_keys: list, value: any):
+        """
+        Updates or sets a specific nested finding within a module's findings.
+        Creates intermediate dictionaries if they don't exist.
+        :param module_key: The key for the module.
+        :param path_keys: A list of keys representing the path to the nested finding.
+        :param value: The value to set for the specific finding.
+        """
+        with self._lock:
+            if module_key not in self._state["findings"]:
+                self._state["findings"][module_key] = {}
+            
+            current_level = self._state["findings"][module_key]
+            
+            for i, key in enumerate(path_keys):
+                if i == len(path_keys) - 1: # Last key, set the value
+                    current_level[key] = value
+                else: # Not the last key, ensure path exists
+                    if key not in current_level or not isinstance(current_level[key], dict):
+                        current_level[key] = {} # Create dict if not exists or not a dict
+                    current_level = current_level[key]
+
     def add_summary_point(self, message: str):
         """Adds a high-level summary point."""
         with self._lock:

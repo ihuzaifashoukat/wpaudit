@@ -72,15 +72,33 @@ def analyze_admin_area_security(state, config, target_url):
     """
     module_key = "wp_analyzer"
     findings_key = "admin_area_security"
-    findings = state.get_specific_finding(module_key, findings_key, {
-        "status": "Running",
-        "details": "Checking admin area security aspects...",
-        "standard_login_status": {"accessible": None, "http_auth": False, "status_code": None, "redirect_url": None},
-        "standard_admin_dir_status": {"accessible": None, "http_auth": False, "status_code": None, "redirect_url": None},
-        "alternative_admin_paths_found": [],
-        "detected_protection_plugins": [],
-        "htaccess_protection_wp_admin": "Unknown" # Could be True, False, Heuristic
-    })
+
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {})
+    findings = all_wp_analyzer_findings.get(findings_key, {})
+    if not findings: # Initialize with default structure
+        findings = {
+            "status": "Not Run",
+            "details": "Checking admin area security aspects...",
+            "standard_login_status": {"accessible": None, "http_auth": False, "status_code": None, "redirect_url": None},
+            "standard_admin_dir_status": {"accessible": None, "http_auth": False, "status_code": None, "redirect_url": None},
+            "alternative_admin_paths_found": [],
+            "detected_protection_plugins": [],
+            "htaccess_protection_wp_admin": "Unknown"
+        }
+
+    findings["status"] = "Running"
+    # Ensure sub-dictionaries and lists are initialized
+    if "standard_login_status" not in findings:
+        findings["standard_login_status"] = {"accessible": None, "http_auth": False, "status_code": None, "redirect_url": None}
+    if "standard_admin_dir_status" not in findings:
+        findings["standard_admin_dir_status"] = {"accessible": None, "http_auth": False, "status_code": None, "redirect_url": None}
+    if "alternative_admin_paths_found" not in findings:
+        findings["alternative_admin_paths_found"] = []
+    if "detected_protection_plugins" not in findings:
+        findings["detected_protection_plugins"] = []
+        
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings) # Save initial state
 
     print("    [i] Analyzing Admin Area Security...")
 
@@ -210,5 +228,7 @@ def analyze_admin_area_security(state, config, target_url):
 
     findings["status"] = "Completed"
     findings["details"] = " ".join(filter(None, details_parts)) # Filter out empty strings
-    state.update_specific_finding(module_key, findings_key, findings)
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings)
     print(f"    [+] Admin area security advanced check finished. Details: {findings['details']}")

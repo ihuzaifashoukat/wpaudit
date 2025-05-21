@@ -3,6 +3,7 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 from .utils import make_request
 from core.utils import sanitize_filename # Corrected import
+import copy # Added import for deepcopy
 
 # Footprints for CAPTCHA plugins (can be shared or expanded from auth_hardening_checker)
 CAPTCHA_FOOTPRINTS_REG = {
@@ -74,24 +75,51 @@ def analyze_user_registration(state, config, target_url):
     wp_analyzer_module_key = "wp_analyzer"
     findings_subkey = "user_registration" # Align with analyzer.py
 
-    analyzer_findings = state.get_module_findings(wp_analyzer_module_key, {})
-    current_phase_findings = analyzer_findings.get(findings_subkey, {})
-    if not current_phase_findings:
-        current_phase_findings = {
-            "status": "Running",
-            "details_summary": "Analyzing user registration process...",
-            "registration_enabled": None, # True, False, "Unknown"
-            "registration_url_found": None,
-            "registration_form_details": { # Details about the found registration form
-                "captcha_detected": False,
-                "password_policy_hints": {},
-                "email_verification_hint": None,
-                "allows_user_registration_hint": None, # For wp-signup.php on multisite
-                "allows_site_registration_hint": None  # For wp-signup.php on multisite
-            },
-            "default_role_check_status": "Manual check recommended (cannot determine default role remotely without registration)."
-        }
+    _DEFAULT_USER_REG_FINDINGS = {
+        "details_summary": "Analyzing user registration process...",
+        "registration_enabled": None, 
+        "registration_url_found": None,
+        "registration_form_details": {
+            "captcha_detected": False,
+            "password_policy_hints": {},
+            "email_verification_hint": None,
+            "allows_user_registration_hint": None,
+            "allows_site_registration_hint": None
+        },
+        "default_role_check_status": "Manual check recommended (cannot determine default role remotely without registration)."
+    }
+
+    analyzer_findings_raw = state.get_module_findings(wp_analyzer_module_key, {})
+    if not isinstance(analyzer_findings_raw, dict):
+        analyzer_findings = {}
+        # Optionally, log this state corruption:
+        # state.add_tool_error(f"Warning: Findings for module '{wp_analyzer_module_key}' were not a dictionary. Resetting for '{findings_subkey}'.")
+    else:
+        analyzer_findings = analyzer_findings_raw
+    
+    existing_phase_findings = analyzer_findings.get(findings_subkey, {})
+
+    # Start with a deep copy of the default structure
+    current_phase_findings = copy.deepcopy(_DEFAULT_USER_REG_FINDINGS)
+
+    # Update with existing findings if they are a dictionary
+    if isinstance(existing_phase_findings, dict):
+        for key, value in existing_phase_findings.items():
+            if key == "registration_form_details":
+                # Only update the nested dict if the 'value' from existing_phase_findings is also a dict.
+                # This prevents overwriting the default dict with a non-dict value.
+                if isinstance(value, dict) and isinstance(current_phase_findings.get(key), dict):
+                    current_phase_findings[key].update(value)
+                # else: existing 'registration_form_details' is not a dict, so we keep the default dict structure.
+                #      Optionally, one could log a warning here.
+            elif key in current_phase_findings: # For other keys, update if the key is part of the default structure.
+                current_phase_findings[key] = value
+            # Keys from existing_phase_findings not in _DEFAULT_USER_REG_FINDINGS are ignored to maintain a clean structure.
+
+    # Always set/overwrite status for the current run
     current_phase_findings["status"] = "Running"
+    
+    # Ensure the findings structure is placed into the parent analyzer_findings
     analyzer_findings[findings_subkey] = current_phase_findings
     
     print("    [i] Analyzing User Registration Security...")

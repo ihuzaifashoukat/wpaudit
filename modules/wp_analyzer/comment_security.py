@@ -54,17 +54,36 @@ def analyze_comment_security(state, config, target_url):
     """
     module_key = "wp_analyzer"
     findings_key = "comment_security"
-    findings = state.get_specific_finding(module_key, findings_key, {
-        "status": "Running",
-        "details": "Analyzing comment security aspects.",
-        "comments_enabled_on_checked_page": None,
-        "checked_page_url": None,
-        "spam_protection_hints": [],
-        "comment_author_link_rel_attributes": {"nofollow_found": False, "ugc_found": False, "other_rel_values": []},
-        "moderation_hint": None, # e.g., "Awaiting moderation message found"
-        "wp_comments_post_php_status": {"accessible": None, "http_auth": False, "status_code": None},
-        "potential_vulnerabilities": [] # For future active checks like unfiltered HTML
-    })
+
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {})
+    findings = all_wp_analyzer_findings.get(findings_key, {})
+    if not findings: # Initialize with default structure
+        findings = {
+            "status": "Not Run",
+            "details": "Analyzing comment security aspects.",
+            "comments_enabled_on_checked_page": None,
+            "checked_page_url": None,
+            "spam_protection_hints": [],
+            "comment_author_link_rel_attributes": {"nofollow_found": False, "ugc_found": False, "other_rel_values": []},
+            "moderation_hint": None,
+            "wp_comments_post_php_status": {"accessible": None, "http_auth": False, "status_code": None},
+            "potential_vulnerabilities": []
+        }
+
+    findings["status"] = "Running"
+    # Ensure sub-dictionaries and lists are initialized
+    if "spam_protection_hints" not in findings:
+        findings["spam_protection_hints"] = []
+    if "comment_author_link_rel_attributes" not in findings:
+        findings["comment_author_link_rel_attributes"] = {"nofollow_found": False, "ugc_found": False, "other_rel_values": []}
+    if "wp_comments_post_php_status" not in findings:
+        findings["wp_comments_post_php_status"] = {"accessible": None, "http_auth": False, "status_code": None}
+    if "potential_vulnerabilities" not in findings:
+        findings["potential_vulnerabilities"] = []
+
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings) # Save initial state
+
     print("    [i] Analyzing Comment Security...")
 
     page_url_with_form, page_html_with_form = find_post_with_comments(state, config, target_url)
@@ -72,7 +91,9 @@ def analyze_comment_security(state, config, target_url):
     if not page_html_with_form:
         findings["status"] = "Completed"
         findings["details"] = "Could not find a page with a comment form to analyze."
-        state.update_specific_finding(module_key, findings_key, findings)
+        all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch
+        all_wp_analyzer_findings[findings_key] = findings
+        state.update_module_findings(module_key, all_wp_analyzer_findings)
         print("    [-] Comment security analysis skipped: No comment form found.")
         return
 
@@ -207,5 +228,7 @@ def analyze_comment_security(state, config, target_url):
 
     findings["details"] = " ".join(summary_parts) if summary_parts else "Comment security checks performed. See specific findings."
     findings["status"] = "Completed"
-    state.update_specific_finding(module_key, findings_key, findings)
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings)
     print(f"    [+] Comment security analysis finished. Details: {findings['details']}")

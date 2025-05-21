@@ -129,14 +129,31 @@ def analyze_extensions(state, config, target_url):
     """
     module_key = "wp_analyzer"
     findings_key = "extension_vulnerabilities"
-    findings = state.get_specific_finding(module_key, findings_key, {
-        "status": "Running",
-        "details": "Enumerating themes and plugins...",
-        "enumerated_themes": [],
-        "enumerated_plugins": [],
-        "vulnerable_themes": [],
-        "vulnerable_plugins": []
-    })
+
+    # Get the full wp_analyzer findings
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {})
+
+    # Get the specific findings for this sub-module, or initialize if not present
+    findings = all_wp_analyzer_findings.get(findings_key, {})
+    if not findings: # Initialize with default structure
+        findings = {
+            "status": "Not Checked",
+            "details": "",
+            "enumerated_themes": [],
+            "enumerated_plugins": [],
+            "vulnerable_themes": [],
+            "vulnerable_plugins": []
+        }
+
+    findings["status"] = "Running"
+    findings["details"] = "Enumerating themes and plugins..."
+    # Ensure lists are initialized if findings were pre-existing but incomplete
+    for list_key in ["enumerated_themes", "enumerated_plugins", "vulnerable_themes", "vulnerable_plugins"]:
+        if list_key not in findings:
+            findings[list_key] = []
+            
+    all_wp_analyzer_findings[findings_key] = findings # Place it back into the main structure
+    state.update_module_findings(module_key, all_wp_analyzer_findings) # Save initial state
 
     found_themes = {}  # slug -> {"version": "x.y.z", "version_from_url": "a.b.c", "source_urls": set()}
     found_plugins = {} # slug -> {"version": "x.y.z", "version_from_url": "a.b.c", "source_urls": set()}
@@ -195,4 +212,7 @@ def analyze_extensions(state, config, target_url):
     print(f"    [+] Extension enumeration complete: Found {num_themes} theme(s), {num_plugins} plugin(s).")
     print("    [!] Vulnerability correlation against database is NOT IMPLEMENTED in this version.")
 
-    state.update_specific_finding(module_key, findings_key, findings)
+    # Update the findings within the larger wp_analyzer structure
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch to be safe
+    all_wp_analyzer_findings[findings_key] = findings # Update the specific part
+    state.update_module_findings(module_key, all_wp_analyzer_findings) # Save the entire wp_analyzer findings

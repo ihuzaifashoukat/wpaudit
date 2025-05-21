@@ -99,10 +99,12 @@ def run_analysis(state, config):
             return True
         print("    [i] Condition not met: Multisite not detected by WPScan (example). Skipping multisite-specific checks.")
         # Update multisite findings to "Skipped (Not Multisite)"
-        ms_findings = current_state.get_module_findings(module_key, {}).get("multisite_analysis", {})
+        all_wp_analyzer_findings = current_state.get_module_findings(module_key, {})
+        ms_findings = all_wp_analyzer_findings.get("multisite_analysis", {})
         ms_findings["status"] = "Skipped (Not Detected as Multisite)"
         ms_findings["details"] = "Skipped as WordPress instance was not identified as a multisite setup by preceding scans."
-        current_state.update_specific_finding(module_key, "multisite_analysis", ms_findings)
+        all_wp_analyzer_findings["multisite_analysis"] = ms_findings # Update the sub-dictionary
+        current_state.update_module_findings(module_key, all_wp_analyzer_findings) # Write back the whole module's findings
         return False
 
     def is_rest_api_generally_accessible(current_state, current_config):

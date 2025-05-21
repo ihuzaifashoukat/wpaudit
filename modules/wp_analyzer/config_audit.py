@@ -13,19 +13,40 @@ def analyze_configuration(state, config, target_url):
     """
     module_key = "wp_analyzer"
     findings_key = "configuration_audit"
-    # Initialize findings structure
-    findings = state.get_specific_finding(module_key, findings_key, {
+
+    # Define the canonical/default structure for this specific audit's findings
+    _DEFAULT_CONFIG_AUDIT_STRUCTURE = {
         "status": "Not Run",
         "details": "Configuration audit checks pending.",
         "wp_debug_check": {"status": "Not Run", "debug_mode_active_hint": None, "display_errors_hint": None, "log_path_exposed": None},
-        "disallow_file_edit_check": {"status": "Not Run", "likely_false": None}, # True means editors likely disabled
+        "disallow_file_edit_check": {"status": "Not Run", "likely_false": None},
         "force_ssl_admin_check": {"status": "Not Run", "likely_true": None},
         "db_prefix_check": {"status": "Informational", "message": "DB prefix cannot be reliably determined remotely. Using a non-default prefix is recommended."},
         "security_keys_check": {"status": "Informational", "message": "Security keys/salts in wp-config.php cannot be checked remotely. Ensure they are unique and strong."},
         "file_permissions_check": {"status": "Informational", "message": "File permissions (wp-config.php, .htaccess) cannot be checked remotely. Ensure they are hardened."},
         "htaccess_rules_check": {"status": "Informational", "message": "Custom .htaccess security rules cannot be verified remotely. Review manually if applicable."}
-    })
+    }
+
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {})
+    findings = all_wp_analyzer_findings.get(findings_key, {})
+    if not findings: # Initialize with default structure
+        findings = _DEFAULT_CONFIG_AUDIT_STRUCTURE.copy() # Use a copy
+    
     findings["status"] = "Running"
+    # Ensure sub-dictionaries are initialized if findings were pre-existing but incomplete
+    for sub_key in ["wp_debug_check", "disallow_file_edit_check", "force_ssl_admin_check", 
+                    "db_prefix_check", "security_keys_check", "file_permissions_check", "htaccess_rules_check"]:
+        if sub_key not in findings: # This case is less likely if the main `findings` was just initialized above
+            findings[sub_key] = {"status": "Not Run"} # Basic init for sub-checks
+            # Use the defined default structure to get the message if available
+            default_sub_info = _DEFAULT_CONFIG_AUDIT_STRUCTURE.get(sub_key, {})
+            if "message" in default_sub_info:
+                 findings[sub_key]["message"] = default_sub_info["message"]
+
+
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings) # Save initial state
+
     print("\n    [i] Performing WordPress Configuration Audit (Remote Heuristics)...")
 
     # 1. WP_DEBUG Detection Heuristic
@@ -194,5 +215,7 @@ def analyze_configuration(state, config, target_url):
         findings["details"] = "Configuration audit heuristics completed: " + " ".join(details_summary)
     
     findings["status"] = "Completed"
-    state.update_specific_finding(module_key, findings_key, findings)
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings)
     print(f"    [+] WordPress Configuration Audit (Remote Heuristics) finished.")

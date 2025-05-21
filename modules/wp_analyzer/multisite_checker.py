@@ -13,16 +13,35 @@ def analyze_multisite(state, config, target_url):
     """
     module_key = "wp_analyzer"
     findings_key = "multisite_analysis"
-    findings = state.get_specific_finding(module_key, findings_key, {
-        "status": "Running",
-        "details": "Checking for signs of Multisite installation and specific configurations.",
-        "is_multisite_detected": False,
-        "detection_methods": [], # List of methods that indicated multisite
-        "wp_signup_status": {"accessible": None, "status_code": None, "registration_disabled_msg": False, "allows_user_reg": None, "allows_site_reg": None},
-        "sunrise_php_present": None, # True, False, "Error"
-        "html_footprints": {"body_class_multisite": False, "blogs_dir_or_sites_in_assets": False},
-        "network_settings_check": {"status": "Informational", "details": "Network settings like default site quotas, upload filetypes, etc., require authenticated access to check."}
-    })
+
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {})
+    findings = all_wp_analyzer_findings.get(findings_key, {})
+    if not findings: # Initialize with default structure
+        findings = {
+            "status": "Not Run",
+            "details": "Checking for signs of Multisite installation and specific configurations.",
+            "is_multisite_detected": False,
+            "detection_methods": [],
+            "wp_signup_status": {"accessible": None, "status_code": None, "registration_disabled_msg": False, "allows_user_reg": None, "allows_site_reg": None},
+            "sunrise_php_present": None,
+            "html_footprints": {"body_class_multisite": False, "blogs_dir_or_sites_in_assets": False},
+            "network_settings_check": {"status": "Informational", "details": "Network settings like default site quotas, upload filetypes, etc., require authenticated access to check."}
+        }
+
+    findings["status"] = "Running"
+    # Ensure sub-dictionaries and lists are initialized
+    if "detection_methods" not in findings:
+        findings["detection_methods"] = []
+    if "wp_signup_status" not in findings:
+        findings["wp_signup_status"] = {"accessible": None, "status_code": None, "registration_disabled_msg": False, "allows_user_reg": None, "allows_site_reg": None}
+    if "html_footprints" not in findings:
+        findings["html_footprints"] = {"body_class_multisite": False, "blogs_dir_or_sites_in_assets": False}
+    if "network_settings_check" not in findings:
+        findings["network_settings_check"] = {"status": "Informational", "details": "Network settings like default site quotas, upload filetypes, etc., require authenticated access to check."}
+
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings) # Save initial state
+
     print("    [i] Analyzing WordPress Multisite Configuration...")
 
     is_multisite_by_any_method = False
@@ -140,5 +159,7 @@ def analyze_multisite(state, config, target_url):
         findings["details"] = "No clear indicators of a WordPress Multisite installation found through common checks."
 
     findings["status"] = "Completed"
-    state.update_specific_finding(module_key, findings_key, findings)
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings)
     print(f"    [+] Multisite analysis finished. Detected: {is_multisite_by_any_method}. Details: {findings['details']}")

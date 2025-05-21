@@ -60,21 +60,42 @@ def analyze_auth_hardening(state, config, target_url):
     """
     module_key = "wp_analyzer"
     findings_key = "auth_hardening"
-    findings = state.get_specific_finding(module_key, findings_key, {
-        "status": "Running",
-        "details": "Performing authentication hardening checks...",
-        "login_page_url": None,
-        "login_page_accessible": None,
-        "http_auth_on_login": False,
-        "captcha_details": {"detected_types": [], "on_login_page": False, "on_lost_password_page": False},
-        "tfa_plugin_footprints": [],
-        "login_security_plugin_footprints": [],
-        "clickjacking_protection_login": {"x_frame_options": None, "csp_frame_ancestors": None},
-        "lost_password_page_accessible": None,
-        # Placeholders for checks difficult to do remotely without being disruptive
-        "password_policy_strength": {"status": "Informational", "details": "Password policy strength is best assessed through configuration review or authenticated testing."},
-        "account_lockout_mechanism": {"status": "Informational", "details": "Account lockout mechanisms are difficult to confirm reliably without potentially disruptive active login attempts."}
-    })
+
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {})
+    findings = all_wp_analyzer_findings.get(findings_key, {})
+    if not findings: # Initialize with default structure
+        findings = {
+            "status": "Not Run",
+            "details": "Performing authentication hardening checks...",
+            "login_page_url": None,
+            "login_page_accessible": None,
+            "http_auth_on_login": False,
+            "captcha_details": {"detected_types": [], "on_login_page": False, "on_lost_password_page": False},
+            "tfa_plugin_footprints": [],
+            "login_security_plugin_footprints": [],
+            "clickjacking_protection_login": {"x_frame_options": None, "csp_frame_ancestors": None},
+            "lost_password_page_accessible": None,
+            "password_policy_strength": {"status": "Informational", "details": "Password policy strength is best assessed through configuration review or authenticated testing."},
+            "account_lockout_mechanism": {"status": "Informational", "details": "Account lockout mechanisms are difficult to confirm reliably without potentially disruptive active login attempts."}
+        }
+
+    findings["status"] = "Running"
+    # Ensure sub-dictionaries and lists are initialized
+    if "captcha_details" not in findings:
+        findings["captcha_details"] = {"detected_types": [], "on_login_page": False, "on_lost_password_page": False}
+    if "tfa_plugin_footprints" not in findings:
+        findings["tfa_plugin_footprints"] = []
+    if "login_security_plugin_footprints" not in findings:
+        findings["login_security_plugin_footprints"] = []
+    if "clickjacking_protection_login" not in findings:
+        findings["clickjacking_protection_login"] = {"x_frame_options": None, "csp_frame_ancestors": None}
+    # Ensure informational sub-dicts are present
+    for info_key in ["password_policy_strength", "account_lockout_mechanism"]:
+        if info_key not in findings:
+             findings[info_key] = {"status": "Informational", "details": "Default message."} # Add appropriate default message if needed
+
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings) # Save initial state
 
     print("    [i] Analyzing Authentication Hardening...")
     login_url = urljoin(target_url, 'wp-login.php')
@@ -199,5 +220,7 @@ def analyze_auth_hardening(state, config, target_url):
 
     findings["details"] = " ".join(summary) if summary else "Auth hardening checks performed. See specific findings."
     findings["status"] = "Completed"
-    state.update_specific_finding(module_key, findings_key, findings)
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings)
     print(f"    [+] Authentication hardening checks finished. Details: {findings['details']}")

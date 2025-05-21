@@ -144,14 +144,27 @@ def analyze_sqli(state, config, target_url):
     """
     module_key = "wp_analyzer"
     findings_key = "contextual_sqli"
-    findings = state.get_specific_finding(module_key, findings_key, {
-        "status": "Running",
-        "details": "Performing enhanced heuristic SQLi checks...",
-        "potential_error_based_sqli": [],
-        "potential_boolean_based_sqli": [],
-        "potential_time_based_sqli": [], # Added for time-based
-        "recommendation": "Use dedicated SQLi tools (like SQLMap) for comprehensive analysis."
-    })
+
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {})
+    findings = all_wp_analyzer_findings.get(findings_key, {})
+    if not findings: # Initialize with default structure
+        findings = {
+            "status": "Not Checked",
+            "details": "",
+            "potential_error_based_sqli": [],
+            "potential_boolean_based_sqli": [],
+            "potential_time_based_sqli": [],
+            "recommendation": "Use dedicated SQLi tools (like SQLMap) for comprehensive analysis."
+        }
+
+    findings["status"] = "Running"
+    findings["details"] = "Performing enhanced heuristic SQLi checks..."
+    for list_key in ["potential_error_based_sqli", "potential_boolean_based_sqli", "potential_time_based_sqli"]:
+        if list_key not in findings:
+            findings[list_key] = []
+            
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings) # Save initial state
 
     print("    [i] Performing enhanced SQLi heuristic checks (error, boolean, time-based)...")
     
@@ -165,7 +178,9 @@ def analyze_sqli(state, config, target_url):
     if not original_query_params:
         findings["details"] = "No query parameters in target URL to test for SQLi."
         findings["status"] = "Completed"
-        state.update_specific_finding(module_key, findings_key, findings)
+        all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch
+        all_wp_analyzer_findings[findings_key] = findings
+        state.update_module_findings(module_key, all_wp_analyzer_findings)
         print("      [i] No query parameters in target URL for SQLi checks.")
         return
 
@@ -333,5 +348,7 @@ def analyze_sqli(state, config, target_url):
         findings["details"] = "No obvious SQLi indicators detected from enhanced heuristic checks (error, boolean, time-based). This does not rule out SQLi. Use SQLMap for thorough testing."
 
     findings["status"] = "Completed"
-    state.update_specific_finding(module_key, findings_key, findings)
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings)
     print(f"    [+] Enhanced SQLi heuristic checks finished. Details: {findings['details']}")

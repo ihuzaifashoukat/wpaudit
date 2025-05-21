@@ -102,15 +102,34 @@ def analyze_core_version(state, config, target_url):
     """
     module_key = "wp_analyzer"
     findings_key = "core_vulnerabilities"
-    findings = state.get_specific_finding(module_key, findings_key, {
-        "status": "Running",
-        "details": "Attempting to detect WordPress core version.",
-        "detected_version": None,
-        "detection_methods_tried": {}, # Store version by method
-        "potential_vulnerabilities": []
-    })
 
-    all_detected_versions = {} # method -> version
+    # Get the full wp_analyzer findings
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {})
+    
+    # Get the specific findings for this sub-module, or initialize if not present
+    findings = all_wp_analyzer_findings.get(findings_key, {})
+    if not findings: # Initialize with default structure if it was empty or not found
+        findings = {
+            "status": "Not Checked", # Initial status
+            "details": "",
+            "detected_version": None,
+            "detection_methods_tried": {},
+            "potential_vulnerabilities": []
+        }
+    
+    # Set initial status for this run
+    findings["status"] = "Running"
+    findings["details"] = "Attempting to detect WordPress core version."
+    # Ensure detection_methods_tried is initialized if findings were pre-existing but incomplete
+    if "detection_methods_tried" not in findings:
+        findings["detection_methods_tried"] = {}
+    if "potential_vulnerabilities" not in findings:
+        findings["potential_vulnerabilities"] = []
+    
+    all_wp_analyzer_findings[findings_key] = findings # Place it back into the main structure
+    state.update_module_findings(module_key, all_wp_analyzer_findings) # Save initial state for this sub-module
+
+    all_detected_versions = findings.get("detection_methods_tried", {}) # Use existing or new
 
     # Fetch homepage HTML once for methods that need it
     print("    Fetching homepage HTML for version detection...")
@@ -201,4 +220,7 @@ def analyze_core_version(state, config, target_url):
         findings["status"] = "Completed"
         findings["details"] = "Could not reliably detect WordPress core version using common methods."
 
-    state.update_specific_finding(module_key, findings_key, findings)
+    # Update the findings within the larger wp_analyzer structure
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch to be safe
+    all_wp_analyzer_findings[findings_key] = findings # Update the specific part
+    state.update_module_findings(module_key, all_wp_analyzer_findings) # Save the entire wp_analyzer findings

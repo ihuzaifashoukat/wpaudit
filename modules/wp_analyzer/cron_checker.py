@@ -10,17 +10,39 @@ def analyze_cron(state, config, target_url):
     """
     module_key = "wp_analyzer"
     findings_key = "cron_analysis"
-    findings = state.get_specific_finding(module_key, findings_key, {
-        "status": "Running",
-        "details": "Analyzing wp-cron.php accessibility and configuration hints.",
-        "wp_cron_url": None,
-        "wp_cron_accessible": None, # True, False, "Error"
-        "wp_cron_status_code": None,
-        "potential_dos_risk": False,
-        "disable_wp_cron_hint": None, # True (hinted), False (not hinted), "Unknown"
-        "alternate_wp_cron_info": "Not actively checked. If used, ensure it's intentional.",
-        "x_robots_tag_present": None # True, False, "Not Applicable"
-    })
+
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {})
+    findings = all_wp_analyzer_findings.get(findings_key, {})
+    if not findings: # Initialize with default structure
+        findings = {
+            "status": "Not Run",
+            "details": "Analyzing wp-cron.php accessibility and configuration hints.",
+            "wp_cron_url": None,
+            "wp_cron_accessible": None, 
+            "wp_cron_status_code": None,
+            "potential_dos_risk": False,
+            "disable_wp_cron_hint": None, 
+            "alternate_wp_cron_info": "Not actively checked. If used, ensure it's intentional.",
+            "x_robots_tag_present": None
+        }
+
+    findings["status"] = "Running"
+    # Ensure all keys are present if findings dict was pre-existing but incomplete
+    default_sub_keys = ["wp_cron_url", "wp_cron_accessible", "wp_cron_status_code", 
+                        "potential_dos_risk", "disable_wp_cron_hint", 
+                        "alternate_wp_cron_info", "x_robots_tag_present"]
+    for key in default_sub_keys:
+        if key not in findings:
+            # Set a sensible default based on the original structure
+            if key in ["potential_dos_risk"]:
+                findings[key] = False
+            else:
+                findings[key] = None if key not in ["alternate_wp_cron_info"] else "Not actively checked. If used, ensure it's intentional."
+
+
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings) # Save initial state
+
     print("    [i] Analyzing WordPress Cron (wp-cron.php)...")
 
     cron_url = urljoin(target_url, 'wp-cron.php')
@@ -124,5 +146,7 @@ def analyze_cron(state, config, target_url):
 
 
     findings["status"] = "Completed"
-    state.update_specific_finding(module_key, findings_key, findings)
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings)
     print(f"    [+] WordPress Cron (wp-cron.php) analysis finished. Overall status: {findings.get('details', 'See specific findings.')}")

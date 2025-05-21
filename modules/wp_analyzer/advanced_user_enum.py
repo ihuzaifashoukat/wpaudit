@@ -59,14 +59,26 @@ def analyze_advanced_user_enum(state, config, target_url):
     """
     module_key = "wp_analyzer"
     findings_key = "advanced_user_enum"
-    findings = state.get_specific_finding(module_key, findings_key, {
-        "status": "Running",
-        "details": "Performing advanced user enumeration techniques.",
-        "author_archive_users": [],
-        "oembed_disclosed_authors": [],
-        "rest_api_users": [],
-        "login_error_users": [] # Placeholder
-    })
+
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {})
+    findings = all_wp_analyzer_findings.get(findings_key, {})
+    if not findings: # Initialize with default structure
+        findings = {
+            "status": "Not Run",
+            "details": "Performing advanced user enumeration techniques.",
+            "author_archive_users": [],
+            "oembed_disclosed_authors": [],
+            "rest_api_users": [],
+            "login_error_users": [] # Placeholder
+        }
+
+    findings["status"] = "Running"
+    for list_key in ["author_archive_users", "oembed_disclosed_authors", "rest_api_users", "login_error_users"]:
+        if list_key not in findings:
+            findings[list_key] = []
+            
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings) # Save initial state
     
     all_found_usernames = set() # To store unique usernames across all methods
 
@@ -238,4 +250,6 @@ def analyze_advanced_user_enum(state, config, target_url):
 
 
     print(f"    [+] Advanced user enumeration finished. Combined unique usernames found: {len(unique_usernames_list)}.")
-    state.update_specific_finding(module_key, findings_key, findings)
+    all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch
+    all_wp_analyzer_findings[findings_key] = findings
+    state.update_module_findings(module_key, all_wp_analyzer_findings)
