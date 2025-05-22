@@ -1,5 +1,12 @@
 # WPAUDIT - Advanced WordPress Security Auditing Suite
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.txt)
+[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/release/python-370/)
+[![GitHub stars](https://img.shields.io/github/stars/ihuzaifashoukat/wpaudit.svg?style=social&label=Star&logo=github)](https://github.com/ihuzaifashoukat/wpaudit/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/ihuzaifashoukat/wpaudit.svg?style=social&label=Fork&logo=github)](https://github.com/ihuzaifashoukat/wpaudit/network/members)
+[![GitHub issues](https://img.shields.io/github/issues/ihuzaifashoukat/wpaudit.svg)](https://github.com/ihuzaifashoukat/wpaudit/issues)
+[![GitHub last commit](https://img.shields.io/github/last-commit/ihuzaifashoukat/wpaudit.svg)](https://github.com/ihuzaifashoukat/wpaudit/commits/main)
+
 Welcome to the official WPAUDIT documentation! This comprehensive guide provides an in-depth overview of WPAUDIT, a powerful **WordPress security audit tool** designed for ethical hackers, penetration testers, and security professionals. Learn about its advanced features, setup, and effective usage for conducting thorough **WordPress vulnerability scanning** and **WordPress penetration testing**.
 
 ## Overview
@@ -247,6 +254,12 @@ We welcome contributions to WPAUDIT! If you're interested in improving this **Wo
 *   **Reporting Bugs:** Submit detailed bug reports via the project's issue tracker. Include steps to reproduce, WPAUDIT version, Python version, OS, and relevant logs.
 *   **Suggesting Features:** Propose new features or enhancements that would benefit the **automated WordPress security** capabilities of WPAUDIT. Explain the use case and potential benefits.
 *   **Submitting Pull Requests:** Fork the repository, make your changes in a separate feature branch, and submit a pull request with a clear description of your contributions. Please adhere to the existing coding style (e.g., PEP 8 for Python) and ensure your changes are well-tested. Adding unit tests for new functionality is highly encouraged.
+
+### Support the Project
+
+If you find WPAUDIT useful and would like to support its development, consider buying me a coffee!
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/ihuzaifashoukat)
 
 
 ## Troubleshooting Common Issues
