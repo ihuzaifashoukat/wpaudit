@@ -40,10 +40,29 @@ def _parse_html_for_extensions(html_content, target_url, found_themes, found_plu
     """Parses HTML content to find theme and plugin references."""
     try:
         soup = BeautifulSoup(html_content, 'lxml')
-        tags = soup.find_all(['link', 'script'])
-        for tag in tags:
-            url = tag.get('href') or tag.get('src')
+        
+        # 1. Search common tags and attributes
+        tags_to_check = soup.find_all(['link', 'script', 'img', 'iframe', 'a'])
+        for tag in tags_to_check:
+            url = None
+            if tag.name == 'a' or tag.name == 'link':
+                url = tag.get('href')
+            if not url and tag.name in ['script', 'img', 'iframe']: # Check src for these tags
+                url = tag.get('src')
+            
             if not url:
+                # For script tags, also check inline content
+                if tag.name == 'script' and tag.string:
+                    inline_script_content = tag.string
+                    for match in PLUGIN_PATTERN.finditer(inline_script_content):
+                        plugin_slug = match.group(1)
+                        # Version from inline script is hard, so we'll rely on readme.txt later
+                        found_plugins.setdefault(plugin_slug, {}).update({"source_urls": set()})
+                        found_plugins[plugin_slug]["source_urls"].add(f"inline_script_mention_on_{target_url}")
+                    for match in THEME_PATTERN.finditer(inline_script_content):
+                        theme_slug = match.group(1)
+                        found_themes.setdefault(theme_slug, {}).update({"source_urls": set()})
+                        found_themes[theme_slug]["source_urls"].add(f"inline_script_mention_on_{target_url}")
                 continue
 
             absolute_url = urljoin(target_url, url)
@@ -52,24 +71,37 @@ def _parse_html_for_extensions(html_content, target_url, found_themes, found_plu
             theme_match = THEME_PATTERN.search(absolute_url)
             if theme_match:
                 theme_slug = theme_match.group(1)
-                if theme_slug not in found_themes or (version_from_url and not found_themes[theme_slug].get("version")):
+                # Update if new, or if this finding provides a version and previous didn't
+                if theme_slug not in found_themes or (version_from_url and not found_themes[theme_slug].get("version_from_url")):
                     found_themes.setdefault(theme_slug, {}).update({"version_from_url": version_from_url, "source_urls": set()})
-                    found_themes[theme_slug]["source_urls"].add(absolute_url)
-                elif theme_slug in found_themes:
-                     found_themes[theme_slug]["source_urls"].add(absolute_url)
+                found_themes[theme_slug]["source_urls"].add(absolute_url)
 
 
             plugin_match = PLUGIN_PATTERN.search(absolute_url)
             if plugin_match:
                 plugin_slug = plugin_match.group(1)
-                if plugin_slug not in found_plugins or (version_from_url and not found_plugins[plugin_slug].get("version")):
+                if plugin_slug not in found_plugins or (version_from_url and not found_plugins[plugin_slug].get("version_from_url")):
                     found_plugins.setdefault(plugin_slug, {}).update({"version_from_url": version_from_url, "source_urls": set()})
-                    found_plugins[plugin_slug]["source_urls"].add(absolute_url)
-                elif plugin_slug in found_plugins:
-                    found_plugins[plugin_slug]["source_urls"].add(absolute_url)
+                found_plugins[plugin_slug]["source_urls"].add(absolute_url)
+
+        # 2. Raw text search for plugin patterns in the entire HTML (as a fallback)
+        # This can be noisy, so it's a supplemental check.
+        for match in PLUGIN_PATTERN.finditer(html_content):
+            plugin_slug = match.group(1)
+            if plugin_slug not in found_plugins: # Only add if not already found by more precise methods
+                found_plugins.setdefault(plugin_slug, {}).update({"source_urls": set()})
+                print(f"        [i] Plugin '{plugin_slug}' detected via raw HTML search on {target_url}.")
+            found_plugins[plugin_slug]["source_urls"].add(f"raw_html_mention_on_{target_url}")
+            
+        for match in THEME_PATTERN.finditer(html_content):
+            theme_slug = match.group(1)
+            if theme_slug not in found_themes:
+                found_themes.setdefault(theme_slug, {}).update({"source_urls": set()})
+                print(f"        [i] Theme '{theme_slug}' detected via raw HTML search on {target_url}.")
+            found_themes[theme_slug]["source_urls"].add(f"raw_html_mention_on_{target_url}")
 
     except Exception as e:
-        print(f"      [-] Error parsing HTML for extensions: {e}")
+        print(f"      [-] Error parsing HTML for extensions on {target_url}: {e}")
 
 def _fetch_sitemap_urls(target_url, config):
     """Fetches URLs from sitemap.xml or sitemap_index.xml."""
@@ -202,65 +234,118 @@ def analyze_extensions(state, config, target_url):
                 data["version"] = version_from_readme
                 print(f"        [+] Found version {version_from_readme} for plugin {slug} from readme.txt")
 
-    # Format findings
-    findings["enumerated_themes"] = [{"name": slug, "version": data.get("version") or data.get("version_from_url"), "details": f"Sources: {len(data['source_urls'])} URL(s)"} for slug, data in found_themes.items()]
-    findings["enumerated_plugins"] = [{"name": slug, "version": data.get("version") or data.get("version_from_url"), "details": f"Sources: {len(data['source_urls'])} URL(s)"} for slug, data in found_plugins.items()]
+    # Initial formatting of enumerated themes and plugins (before fetching full metadata)
+    enumerated_themes_list = []
+    for slug, data in found_themes.items():
+        enumerated_themes_list.append({
+            "name": slug, 
+            "version": data.get("version") or data.get("version_from_url"), 
+            "detection_sources": list(data.get('source_urls', [])),
+            "metadata": {} # Placeholder for richer metadata
+        })
+    findings["enumerated_themes"] = enumerated_themes_list
+
+    enumerated_plugins_list = []
+    for slug, data in found_plugins.items():
+        enumerated_plugins_list.append({
+            "name": slug,
+            "version": data.get("version") or data.get("version_from_url"),
+            "detection_sources": list(data.get('source_urls', [])),
+            "metadata": {} # Placeholder for richer metadata
+        })
+    findings["enumerated_plugins"] = enumerated_plugins_list
 
     num_themes = len(findings["enumerated_themes"])
     num_plugins = len(findings["enumerated_plugins"])
     
-    print(f"    [+] Extension enumeration complete: Found {num_themes} theme(s), {num_plugins} plugin(s).")
+    print(f"    [+] Initial extension enumeration complete: Found {num_themes} theme(s), {num_plugins} plugin(s).")
+    print(f"    Attempting to fetch detailed metadata and vulnerabilities from WPScan API...")
 
-    # --- Vulnerability Correlation for Themes and Plugins ---
+    # --- Vulnerability Correlation and Metadata Fetching for Themes and Plugins ---
     vuln_manager = VulnerabilityManager(config, state)
-    vulnerable_themes_found = []
-    vulnerable_plugins_found = []
+    updated_enumerated_themes = []
+    updated_enumerated_plugins = []
+    # vulnerable_themes_found and vulnerable_plugins_found will be derived from updated_enumerated lists
     details_log = []
 
-    print("    Attempting to correlate vulnerabilities for enumerated themes...")
-    for theme_info in findings["enumerated_themes"]:
-        theme_slug = theme_info["name"]
-        theme_version = theme_info.get("version")
+    for theme_info_initial in findings["enumerated_themes"]:
+        theme_slug = theme_info_initial["name"]
+        theme_version = theme_info_initial.get("version")
+        theme_data_from_api = {"metadata": {}, "vulnerabilities": []}
         try:
-            theme_vulns = vuln_manager.get_theme_vulnerabilities(theme_slug, theme_version)
-            if theme_vulns:
-                msg = f"Found {len(theme_vulns)} potential vulnerabilities for theme {theme_slug} (version: {theme_version or 'Unknown'})."
+            theme_data_from_api = vuln_manager.get_theme_vulnerabilities(theme_slug, theme_version)
+            
+            # Update the theme_info with metadata
+            theme_info_initial["metadata"] = theme_data_from_api.get("metadata", {})
+            # If API provides a more accurate version (e.g. latest_version if detected is null), consider updating
+            if not theme_version and theme_info_initial["metadata"].get("latest_version"):
+                 theme_info_initial["version"] = theme_info_initial["metadata"]["latest_version"]
+                 theme_version = theme_info_initial["version"] # update for vuln list
+                 print(f"        [i] Updated version for theme {theme_slug} to latest known: {theme_version}")
+
+            if theme_data_from_api.get("vulnerabilities"):
+                msg = f"Found {len(theme_data_from_api['vulnerabilities'])} potential vulnerabilities for theme {theme_slug} (version: {theme_version or 'Unknown'})."
                 print(f"      [+] {msg}")
                 details_log.append(msg)
-                vulnerable_themes_found.append({"name": theme_slug, "version": theme_version, "vulnerabilities": theme_vulns})
-            # else:
-            #     print(f"      [i] No vulnerabilities found for theme {theme_slug} (version: {theme_version or 'Unknown'}).")
+                # Add vulnerabilities directly to the theme_info_initial object
+                theme_info_initial["vulnerabilities"] = theme_data_from_api["vulnerabilities"]
+            else:
+                theme_info_initial["vulnerabilities"] = []
+            
+            updated_enumerated_themes.append(theme_info_initial)
+
         except Exception as e:
-            err_msg = f"Error during vulnerability correlation for theme {theme_slug}: {e}"
+            err_msg = f"Error during metadata/vulnerability lookup for theme {theme_slug}: {e}"
             print(f"      [-] {err_msg}")
             details_log.append(err_msg)
+            theme_info_initial["metadata"]["error"] = err_msg # Log error in metadata
+            theme_info_initial["vulnerabilities"] = []
+            updated_enumerated_themes.append(theme_info_initial) # Still add it to the list
     
-    findings["vulnerable_themes"] = vulnerable_themes_found
+    findings["enumerated_themes"] = updated_enumerated_themes
+    # Filter for themes that have vulnerabilities for the separate "vulnerable_themes" list
+    findings["vulnerable_themes"] = [t for t in updated_enumerated_themes if t.get("vulnerabilities")]
 
-    print("    Attempting to correlate vulnerabilities for enumerated plugins...")
-    for plugin_info in findings["enumerated_plugins"]:
-        plugin_slug = plugin_info["name"]
-        plugin_version = plugin_info.get("version")
+
+    for plugin_info_initial in findings["enumerated_plugins"]:
+        plugin_slug = plugin_info_initial["name"]
+        plugin_version = plugin_info_initial.get("version")
+        plugin_data_from_api = {"metadata": {}, "vulnerabilities": []}
         try:
-            plugin_vulns = vuln_manager.get_plugin_vulnerabilities(plugin_slug, plugin_version)
-            if plugin_vulns:
-                msg = f"Found {len(plugin_vulns)} potential vulnerabilities for plugin {plugin_slug} (version: {plugin_version or 'Unknown'})."
+            plugin_data_from_api = vuln_manager.get_plugin_vulnerabilities(plugin_slug, plugin_version)
+
+            plugin_info_initial["metadata"] = plugin_data_from_api.get("metadata", {})
+            if not plugin_version and plugin_info_initial["metadata"].get("latest_version"):
+                 plugin_info_initial["version"] = plugin_info_initial["metadata"]["latest_version"]
+                 plugin_version = plugin_info_initial["version"]
+                 print(f"        [i] Updated version for plugin {plugin_slug} to latest known: {plugin_version}")
+
+            if plugin_data_from_api.get("vulnerabilities"):
+                msg = f"Found {len(plugin_data_from_api['vulnerabilities'])} potential vulnerabilities for plugin {plugin_slug} (version: {plugin_version or 'Unknown'})."
                 print(f"      [+] {msg}")
                 details_log.append(msg)
-                vulnerable_plugins_found.append({"name": plugin_slug, "version": plugin_version, "vulnerabilities": plugin_vulns})
-            # else:
-            #     print(f"      [i] No vulnerabilities found for plugin {plugin_slug} (version: {plugin_version or 'Unknown'}).")
+                plugin_info_initial["vulnerabilities"] = plugin_data_from_api["vulnerabilities"]
+            else:
+                plugin_info_initial["vulnerabilities"] = []
+
+            updated_enumerated_plugins.append(plugin_info_initial)
+
         except Exception as e:
-            err_msg = f"Error during vulnerability correlation for plugin {plugin_slug}: {e}"
+            err_msg = f"Error during metadata/vulnerability lookup for plugin {plugin_slug}: {e}"
             print(f"      [-] {err_msg}")
             details_log.append(err_msg)
+            plugin_info_initial["metadata"]["error"] = err_msg
+            plugin_info_initial["vulnerabilities"] = []
+            updated_enumerated_plugins.append(plugin_info_initial)
 
-    findings["vulnerable_plugins"] = vulnerable_plugins_found
+    findings["enumerated_plugins"] = updated_enumerated_plugins
+    findings["vulnerable_plugins"] = [p for p in updated_enumerated_plugins if p.get("vulnerabilities")]
     
     findings["status"] = "Completed"
     base_detail = f"Enumerated {num_themes} theme(s) and {num_plugins} plugin(s) from {scanned_page_count} scanned page(s)."
-    if vulnerable_themes_found or vulnerable_plugins_found:
-        base_detail += f" Found {len(vulnerable_themes_found)} theme(s) and {len(vulnerable_plugins_found)} plugin(s) with potential vulnerabilities."
+    # Correctly refer to the findings dictionary for vulnerable counts
+    if findings.get("vulnerable_themes") or findings.get("vulnerable_plugins"):
+        base_detail += f" Found {len(findings.get('vulnerable_themes', []))} theme(s) and {len(findings.get('vulnerable_plugins', []))} plugin(s) with potential vulnerabilities."
     else:
         base_detail += " No vulnerabilities found for enumerated extensions based on available data."
     
