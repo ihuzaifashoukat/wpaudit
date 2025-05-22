@@ -123,24 +123,49 @@ def run_scan(state, config, target_urls=None, discovered_paths=None, urls_with_p
                         if unique_finding_id in processed_finding_ids: continue
                         processed_finding_ids.add(unique_finding_id)
 
+                        # Enhance remediation_details with more specific info from the finding
+                        curl_command = finding.get("curl-command")
+                        evidence = finding.get("extracted-results") or finding.get("matcher-name") # Prefer extracted results as evidence
+
                         remediation_details = {
                             "source": "Nuclei",
                             "template_id": finding.get("template-id"),
                             "finding_name": info.get("name"),
-                            "description": info.get("description", "N/A"),
+                            "description": info.get("description", "N/A"), # Main description
                             "severity": severity,
                             "tags": info.get("tags", []),
-                            "reference": info.get("reference", []),
-                            "matched_at": finding.get("matched-at"),
-                            "remediation": info.get("remediation", "Review finding details and apply recommended security configurations or patches.")
+                            "reference": info.get("reference", []) or [finding.get("host", "N/A")], # Fallback to host if no other ref
+                            "matched_at": finding.get("matched-at") or finding.get("host"),
+                            "evidence": evidence,
+                            "curl_command": curl_command, # For reproduction
+                            "remediation": info.get("remediation") or "Review finding details, validate, and apply recommended security configurations or patches. Check template references for specific guidance."
                         }
                         state.add_remediation_suggestion(unique_finding_id, remediation_details)
 
                     except json.JSONDecodeError:
                         print(f"   [!] Warning: Could not decode Nuclei JSON line: {line.strip()}")
-            state.update_module_findings("nuclei_results", {"findings": findings, "status": "Completed"})
-            state.add_summary_point(f"Nuclei scan completed ({profile_name}), found {len(findings)} potential issues across {len(targets_to_scan_final)} target(s).")
-            if findings: state.add_critical_alert(f"Nuclei found {len(findings)} issues ({profile_name}) across {len(targets_to_scan_final)} target(s)!")
+            
+            # Calculate severity counts
+            severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "unknown": 0}
+            for f_item in findings:
+                sev = f_item.get("info", {}).get("severity", "unknown").lower()
+                if sev in severity_counts:
+                    severity_counts[sev] += 1
+                else:
+                    severity_counts["unknown"] += 1
+            
+            state.update_module_findings("nuclei_results", {
+                "findings": findings, 
+                "status": "Completed",
+                "severity_summary": severity_counts
+            })
+            
+            summary_msg = f"Nuclei scan completed ({profile_name}), found {len(findings)} potential issues across {len(targets_to_scan_final)} target(s)."
+            summary_msg += f" (Critical: {severity_counts['critical']}, High: {severity_counts['high']}, Medium: {severity_counts['medium']})"
+            state.add_summary_point(summary_msg)
+            
+            if findings: # Keep general critical alert if any findings
+                state.add_critical_alert(f"Nuclei found {len(findings)} issues ({profile_name}). Severity Breakdown: C:{severity_counts['critical']},H:{severity_counts['high']},M:{severity_counts['medium']},L:{severity_counts['low']},I:{severity_counts['info']}.")
 
         except Exception as e: # Catch errors during file reading/processing
             err_msg = f"Error parsing Nuclei output file '{nuclei_output_jsonl}': {e}"

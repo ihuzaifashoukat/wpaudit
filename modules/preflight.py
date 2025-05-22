@@ -85,28 +85,71 @@ def _check_waf(state, config, target_url):
             # Use a non-greedy regex to better isolate JSON from potential surrounding text/banner.
             json_match = re.search(r'(\[.*?\]|\{.*?\})', waf_proc_output, re.DOTALL)
             if json_match:
-                waf_data_list = json.loads(json_match.group(1))
-                waf_data = waf_data_list[0] if isinstance(waf_data_list, list) and waf_data_list else (waf_data_list if isinstance(waf_data_list, dict) else {})
-                state.update_module_findings(module_key, {"data": waf_data}) # Store parsed data
+                json_text_original = json_match.group(1)
+                # Attempt to remove null bytes as they can cause JSONDecodeError and might not print.
+                json_text_cleaned = json_text_original.replace('\x00', '')
 
-                if waf_data.get("firewall") and waf_data["firewall"] not in ["None", "Generic"]:
-                    waf_name = waf_data['firewall']
-                    manu = waf_data.get('manufacturer', 'N/A')
-                    print(f"    [+] WAF Detected: {waf_name} (Manufacturer: {manu})")
-                    status_msg = f"Detected: {waf_name}"
-                    state.update_module_findings(module_key, {"status": status_msg})
-                    state.add_critical_alert(f"WAF Detected: {waf_name}. May affect scans/exploitation.")
-                    state.add_summary_point(f"WAF Detected: {waf_name}.")
+                if not json_text_cleaned.strip():
+                    print(f"    [-] Wafw00f: Extracted JSON part was empty or only whitespace after cleaning null bytes. Original Raw segment (first 100 chars): '{json_text_original[:100]}'... Full Raw output (first 300 chars): '{waf_proc_output[:300]}'")
+                    state.update_module_findings(module_key, {"error": "Cleaned JSON part was empty", "raw_json_part": json_text_original, "raw_output": waf_proc_output})
                 else:
-                    print("    [i] No specific WAF explicitly identified by Wafw00f.")
-                    state.update_module_findings(module_key, {"status": "Not Detected or Unknown by Wafw00f"})
-            else:
-                 print(f"    [-] Wafw00f: No valid JSON found in output. Raw: {waf_proc_output[:300]}")
-                 state.update_module_findings(module_key, {"error": "No JSON found in output", "raw_output": waf_proc_output})
+                    waf_data_list = json.loads(json_text_cleaned) # Try parsing cleaned JSON
+                    waf_data = waf_data_list[0] if isinstance(waf_data_list, list) and waf_data_list else (waf_data_list if isinstance(waf_data_list, dict) else {})
+                    state.update_module_findings(module_key, {"data": waf_data}) # Store parsed data
 
-        except json.JSONDecodeError:
-            print(f"    [-] Wafw00f: Could not decode JSON output. Raw: {waf_proc_output[:300]}")
-            state.update_module_findings(module_key, {"error": "JSON Decode Error", "raw_output": waf_proc_output})
+                    if waf_data.get("firewall") and waf_data["firewall"] not in ["None", "Generic"]:
+                        waf_name = waf_data['firewall']
+                        manu = waf_data.get('manufacturer', 'N/A')
+                        print(f"    [+] WAF Detected: {waf_name} (Manufacturer: {manu})")
+                        status_msg = f"Detected: {waf_name}"
+                        state.update_module_findings(module_key, {"status": status_msg})
+                        state.add_critical_alert(f"WAF Detected: {waf_name}. May affect scans/exploitation.")
+                        state.add_summary_point(f"WAF Detected: {waf_name}.")
+                    else:
+                        print("    [i] No specific WAF explicitly identified by Wafw00f.")
+                        state.update_module_findings(module_key, {"status": "Not Detected or Unknown by Wafw00f"})
+            else: # json_match is None
+                 raw_output_snippet = waf_proc_output[:300]
+                 error_msg = "No valid JSON found in Wafw00f output."
+                 detailed_error = "No JSON structure (starting with { or [ and ending with } or ]) was found."
+
+                 # Check for known non-JSON error patterns from Wafw00f
+                 if "404 Hack Not Found" in waf_proc_output:
+                     error_msg = "Wafw00f returned a '404 Hack Not Found' error."
+                     detailed_error = "This typically indicates Wafw00f encountered an issue probing the target, or the target itself returned this unique error."
+                 elif "Could not connect to" in waf_proc_output: # Example of another pattern
+                     error_msg = "Wafw00f reported a connection issue."
+                     detailed_error = "Wafw00f failed to connect to the target URL."
+                 # Add more known patterns if necessary
+
+                 print(f"    [-] Wafw00f: {error_msg} Raw output snippet: {raw_output_snippet}")
+                 state.update_module_findings(module_key, {
+                     "error": error_msg,
+                     "detailed_error": detailed_error,
+                     "raw_output": waf_proc_output
+                 })
+
+        except json.JSONDecodeError as jde:
+            # json_text_cleaned would be defined if we reached the json.loads(json_text_cleaned) line
+            problematic_text_snippet = json_text_cleaned[:300] if 'json_text_cleaned' in locals() and json_text_cleaned is not None else "N/A (json_text_cleaned not available or None)"
+            
+            print(f"    [-] Wafw00f: Could not decode JSON output (even after attempting to clean null bytes).")
+            print(f"        Text that failed parsing (first 300 chars): '{problematic_text_snippet}'")
+            print(f"        JSONDecodeError details: {jde}")
+            # Show full raw output only if it provides more context or is short
+            if len(waf_proc_output) < 350 or \
+               ('json_text_cleaned' in locals() and json_text_cleaned is not None and problematic_text_snippet != waf_proc_output[:300]) or \
+               ('json_text_cleaned' not in locals() or json_text_cleaned is None):
+                 print(f"        Full Wafw00f raw output (first 300 chars): {waf_proc_output[:300]}")
+            elif problematic_text_snippet == waf_proc_output[:300] and len(waf_proc_output) >=350 :
+                 print(f"        (Full Wafw00f raw output starts with the same text as 'Text that failed parsing')")
+
+            state.update_module_findings(module_key, {
+                "error": "JSON Decode Error after cleaning",
+                "failed_json_text": json_text_cleaned if 'json_text_cleaned' in locals() and json_text_cleaned is not None else "N/A",
+                "raw_output": waf_proc_output,
+                "json_decode_exception": str(jde)
+            })
         except Exception as e:
             print(f"    [-] Wafw00f: Error processing output: {e}")
             state.update_module_findings(module_key, {"error": str(e), "raw_output": waf_proc_output})

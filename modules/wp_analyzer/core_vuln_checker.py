@@ -4,9 +4,7 @@ import re
 from urllib.parse import urljoin, urlparse, parse_qs
 from bs4 import BeautifulSoup
 from .utils import make_request # Assuming a utility for requests exists
-
-# Placeholder for vulnerability database interaction
-# CORE_VULN_DB = {}
+from core.vulnerability_manager import VulnerabilityManager # Import the new manager
 
 def _extract_version_from_url(url):
     """Attempts to extract a ?ver= query parameter from a URL."""
@@ -211,14 +209,37 @@ def analyze_core_version(state, config, target_url):
         findings["detected_version"] = final_version
         findings["status"] = "Completed"
         if len(unique_versions) > 1:
-             findings["details"] = f"Potentially detected WordPress core version {final_version} (via {final_method}). However, conflicting versions were found: {all_detected_versions}. Manual verification advised. Vulnerability check NOT implemented."
+             findings["details"] = f"Potentially detected WordPress core version {final_version} (via {final_method}). However, conflicting versions were found: {all_detected_versions}. Manual verification advised."
         else:
-             findings["details"] = f"Detected WordPress core version {final_version} (via {final_method}). Vulnerability check NOT implemented."
+             findings["details"] = f"Detected WordPress core version {final_version} (via {final_method})."
         
-        print("    [!] Vulnerability correlation against database is NOT IMPLEMENTED in this version.")
-    else:
+        # --- Vulnerability Correlation ---
+        print(f"    Attempting to correlate vulnerabilities for WordPress version {final_version}...")
+        try:
+            vuln_manager = VulnerabilityManager(config, state) # Pass config and state
+            core_vulnerabilities = vuln_manager.get_core_vulnerabilities(final_version)
+            
+            if core_vulnerabilities:
+                findings["potential_vulnerabilities"] = core_vulnerabilities
+                findings["details"] += f" Found {len(core_vulnerabilities)} potential vulnerabilities."
+                print(f"    [+] Found {len(core_vulnerabilities)} potential vulnerabilities for version {final_version}.")
+                for vuln in core_vulnerabilities[:3]: # Print a few examples
+                    print(f"        - Title: {vuln.get('title', 'N/A')}, Severity: {vuln.get('severity', 'N/A')}")
+                if len(core_vulnerabilities) > 3:
+                    print("        ... and more. See report for details.")
+            else:
+                findings["potential_vulnerabilities"] = []
+                findings["details"] += " No specific vulnerabilities found for this version in the database."
+                print(f"    [i] No specific vulnerabilities found for WordPress {final_version} in the database.")
+        except Exception as e:
+            findings["potential_vulnerabilities"] = []
+            findings["details"] += f" Error during vulnerability correlation: {e}."
+            print(f"    [-] Error during vulnerability correlation for version {final_version}: {e}")
+            # Optionally log this to a more detailed error log if available in state
+        
+    else: # No final_version determined
         findings["status"] = "Completed"
-        findings["details"] = "Could not reliably detect WordPress core version using common methods."
+        findings["details"] = "Could not reliably detect WordPress core version using common methods. Vulnerability check skipped."
 
     # Update the findings within the larger wp_analyzer structure
     all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch to be safe

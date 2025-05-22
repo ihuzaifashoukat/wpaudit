@@ -34,7 +34,7 @@ TOOL_VERSION_COMMANDS = {
     "msfconsole": ["msfconsole", "-v"],
     "subfinder": ["subfinder", "-version"],
     "ffuf": ["ffuf", "-V"],
-    "arjun": ["arjun", "-h"], # Changed to -h for Arjun, as --version shows usage and exits RC=2
+    "arjun": ["arjun", "--version"], # Reverted to --version; RC=2 handled by is_present_despite_rc
     "wafw00f": ["wafw00f", "-V"], # Corrected to -V based on documentation
     # Add other tools if needed
 }

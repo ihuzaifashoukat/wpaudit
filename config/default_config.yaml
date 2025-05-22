@@ -28,7 +28,7 @@ default_user_agent: "WPAUDIT/2.0 (Ethical Audit)"
 interactive_prompts: true
 respect_robots_txt: false
 enable_waf_detection: true
-wordlist_path: "/usr/share/wordlists/rockyou.txt" # Adjust as needed
+wordlist_path: "C:/Path/To/Your/Wordlists/rockyou.txt" # WINDOWS: Adjust this path. Linux/macOS: /usr/share/wordlists/rockyou.txt or similar.
 requests_timeout: 15
 max_param_fuzz_urls: 3 # For conceptual param fuzzing in wp_analyzer
 js_analysis_max_files: 5 # Conceptual limit for JS analysis
@@ -56,7 +56,7 @@ subdomain_validation_timeout: 5 # Timeout in seconds for HEAD requests during su
 
 # --- Directory Bruteforcer Config (ffuf) ---
 enable_directory_bruteforce: true
-directory_bruteforce_wordlist: "/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt" # Adjust path as needed
+directory_bruteforce_wordlist: "C:/Path/To/Your/Wordlists/directory-list-2.3-medium.txt" # WINDOWS: Adjust this path. Linux/macOS: /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt or similar.
 ffuf_options: "-mc 200,204,301,302,307,401,403 -fc 404 -fr '/^$/' -t 50" # Default options, match common codes, filter 404s and empty responses, 50 threads
 ffuf_recursion_depth: 0 # Set > 0 to enable recursion
 ffuf_extensions: [".php", ".html", ".txt", ".bak", ".old", ".zip", ".tar.gz"] # Common extensions to append

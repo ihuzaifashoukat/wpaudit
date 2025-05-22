@@ -4,6 +4,7 @@ import re
 from urllib.parse import urlparse, urljoin, parse_qs
 from bs4 import BeautifulSoup # Ensure this is imported
 from .utils import make_request
+from core.vulnerability_manager import VulnerabilityManager # Import the new manager
 
 # Regex patterns to find theme/plugin slugs in URLs
 THEME_PATTERN = re.compile(r'/wp-content/themes/([^/]+)/')
@@ -207,11 +208,68 @@ def analyze_extensions(state, config, target_url):
 
     num_themes = len(findings["enumerated_themes"])
     num_plugins = len(findings["enumerated_plugins"])
-    findings["status"] = "Completed"
-    findings["details"] = f"Enumerated {num_themes} theme(s) and {num_plugins} plugin(s) from {scanned_page_count} scanned page(s). Vulnerability check NOT implemented."
+    
     print(f"    [+] Extension enumeration complete: Found {num_themes} theme(s), {num_plugins} plugin(s).")
-    print("    [!] Vulnerability correlation against database is NOT IMPLEMENTED in this version.")
 
+    # --- Vulnerability Correlation for Themes and Plugins ---
+    vuln_manager = VulnerabilityManager(config, state)
+    vulnerable_themes_found = []
+    vulnerable_plugins_found = []
+    details_log = []
+
+    print("    Attempting to correlate vulnerabilities for enumerated themes...")
+    for theme_info in findings["enumerated_themes"]:
+        theme_slug = theme_info["name"]
+        theme_version = theme_info.get("version")
+        try:
+            theme_vulns = vuln_manager.get_theme_vulnerabilities(theme_slug, theme_version)
+            if theme_vulns:
+                msg = f"Found {len(theme_vulns)} potential vulnerabilities for theme {theme_slug} (version: {theme_version or 'Unknown'})."
+                print(f"      [+] {msg}")
+                details_log.append(msg)
+                vulnerable_themes_found.append({"name": theme_slug, "version": theme_version, "vulnerabilities": theme_vulns})
+            # else:
+            #     print(f"      [i] No vulnerabilities found for theme {theme_slug} (version: {theme_version or 'Unknown'}).")
+        except Exception as e:
+            err_msg = f"Error during vulnerability correlation for theme {theme_slug}: {e}"
+            print(f"      [-] {err_msg}")
+            details_log.append(err_msg)
+    
+    findings["vulnerable_themes"] = vulnerable_themes_found
+
+    print("    Attempting to correlate vulnerabilities for enumerated plugins...")
+    for plugin_info in findings["enumerated_plugins"]:
+        plugin_slug = plugin_info["name"]
+        plugin_version = plugin_info.get("version")
+        try:
+            plugin_vulns = vuln_manager.get_plugin_vulnerabilities(plugin_slug, plugin_version)
+            if plugin_vulns:
+                msg = f"Found {len(plugin_vulns)} potential vulnerabilities for plugin {plugin_slug} (version: {plugin_version or 'Unknown'})."
+                print(f"      [+] {msg}")
+                details_log.append(msg)
+                vulnerable_plugins_found.append({"name": plugin_slug, "version": plugin_version, "vulnerabilities": plugin_vulns})
+            # else:
+            #     print(f"      [i] No vulnerabilities found for plugin {plugin_slug} (version: {plugin_version or 'Unknown'}).")
+        except Exception as e:
+            err_msg = f"Error during vulnerability correlation for plugin {plugin_slug}: {e}"
+            print(f"      [-] {err_msg}")
+            details_log.append(err_msg)
+
+    findings["vulnerable_plugins"] = vulnerable_plugins_found
+    
+    findings["status"] = "Completed"
+    base_detail = f"Enumerated {num_themes} theme(s) and {num_plugins} plugin(s) from {scanned_page_count} scanned page(s)."
+    if vulnerable_themes_found or vulnerable_plugins_found:
+        base_detail += f" Found {len(vulnerable_themes_found)} theme(s) and {len(vulnerable_plugins_found)} plugin(s) with potential vulnerabilities."
+    else:
+        base_detail += " No vulnerabilities found for enumerated extensions based on available data."
+    
+    if details_log: # Add any specific error messages from correlation
+        base_detail += " Correlation notes: " + " | ".join(details_log[:3]) # Show first few notes
+        if len(details_log) > 3: base_detail += " ... (see logs for more)."
+
+    findings["details"] = base_detail
+    
     # Update the findings within the larger wp_analyzer structure
     all_wp_analyzer_findings = state.get_module_findings(module_key, {}) # Re-fetch to be safe
     all_wp_analyzer_findings[findings_key] = findings # Update the specific part
