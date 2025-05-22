@@ -3,6 +3,37 @@ import re
 from datetime import datetime
 import socket # Added for IP resolution
 from urllib.parse import urlparse # Added for get_scan_filename_prefix fallback
+import requests # Added for make_api_request
+
+def make_api_request(url: str, method: str = "GET", headers: dict = None, data: dict = None, params: dict = None, timeout: int = 10):
+    """
+    Makes an API request to the specified URL.
+
+    Args:
+        url (str): The URL to send the request to.
+        method (str, optional): The HTTP method to use (GET, POST, etc.). Defaults to "GET".
+        headers (dict, optional): A dictionary of headers to send with the request. Defaults to None.
+        data (dict, optional): A dictionary of data to send in the request body (for POST, PUT). Defaults to None.
+        params (dict, optional): A dictionary of URL parameters to append to the URL. Defaults to None.
+        timeout (int, optional): How many seconds to wait for the server to send data. Defaults to 10.
+
+    Returns:
+        requests.Response or None: The response object if the request was successful, None otherwise.
+    """
+    try:
+        response = requests.request(method, url, headers=headers, json=data, params=params, timeout=timeout)
+        response.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
+        return response
+    except requests.exceptions.RequestException as e:
+        print(f"    [!] API request to {url} failed: {e}")
+        return None
+
+def strip_ansi_codes(text: str) -> str:
+    """Removes ANSI escape codes from a string."""
+    if not text:
+        return ""
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    return ansi_escape.sub('', text)
 
 def get_target_ip(hostname: str):
     """Resolves a hostname to an IP address."""

@@ -1,6 +1,7 @@
 import subprocess
 import os
 import sys
+from core.utils import strip_ansi_codes # Added for stripping ANSI codes
 
 # Note: Consider passing 'state' to this function if you want to log tool errors directly from here.
 # For now, error logging is handled by the calling modules based on the return value.
@@ -86,7 +87,11 @@ def run_command(command_list, tool_name, config, timeout=None, capture_output=Tr
                 shell=shell,
                 errors='ignore'
             )
-            return process_obj if return_proc else (process_obj.stdout if capture_output else "")
+            # Apply ANSI stripping if capturing output and not returning the raw process object
+            stdout_content = process_obj.stdout
+            if capture_output and not return_proc and stdout_content:
+                stdout_content = strip_ansi_codes(stdout_content)
+            return process_obj if return_proc else (stdout_content if capture_output else "")
 
     except FileNotFoundError:
         msg = f"{tool_name}: Command '{actual_command_path}' not found. Check PATH and config['tool_paths']."
